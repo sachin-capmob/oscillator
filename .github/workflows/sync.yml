@@ -1,0 +1,49 @@
+name: Linear Sync
+
+# Cron polling architecture: there is no always-on server and no webhooks.
+# This job pulls from Linear and refreshes the rollups 3×/day, plus on demand.
+on:
+  schedule:
+    # 06:00, 13:00, 20:00 UTC daily
+    - cron: "0 6,13,20 * * *"
+  workflow_dispatch: {}
+
+# Never let two syncs overlap (they share the sync_state watermark).
+concurrency:
+  group: linear-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Apply database migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DB_SSL: "true"
+        run: alembic upgrade head
+
+      - name: Run Linear sync
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          DB_SSL: "true"
+        # `python -m` puts backend/ on sys.path so `app` is importable.
+        # A non-zero exit (any phase failed) fails the job loudly; the watermark
+        # is NOT advanced, so the next run safely re-syncs the same window.
+        run: python -m app.jobs.sync
