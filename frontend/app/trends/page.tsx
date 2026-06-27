@@ -17,7 +17,7 @@ export default function TrendsPage() {
   if (thr.error) return <ErrorState message={thr.error} />;
 
   const unit = thr.data?.unit ?? range;
-  const thrData = thr.data?.series.map((p) => ({ date: formatDate(p.period), Completed: p.value ?? 0 })) ?? [];
+  const thrData = thr.data?.series.map((p) => ({ date: formatDate(p.period), Completed: p.completed ?? 0 })) ?? [];
   const cycData =
     cyc.data?.series.map((p) => ({
       date: formatDate(p.period),
