@@ -510,20 +510,6 @@ async def by_actor(
         spark.setdefault(r["actor_id"], {})[r["day"]] = r["throughput"]
     days = [spark_start + timedelta(days=i) for i in _irange(14)]
 
-    # Issues created per actor in the window (creator_id).
-    created_rows = (
-        await session.execute(
-            text(
-                "SELECT creator_id AS actor_id, count(*)::int AS created "
-                "FROM issues "
-                "WHERE creator_id IS NOT NULL AND created_at >= :cs AND created_at < :ce "
-                "GROUP BY creator_id"
-            ),
-            {"cs": cs, "ce": ce},
-        )
-    ).mappings().all()
-    created_map: dict[int, int] = {r["actor_id"]: r["created"] for r in created_rows}
-
     actors = [
         ActorStat(
             actor_id=r["actor_id"],
@@ -535,7 +521,6 @@ async def by_actor(
             if r["avg_cycle_hours"] is not None
             else None,
             comments=r["comments"],
-            created=created_map.get(r["actor_id"], 0),
             sparkline=[spark.get(r["actor_id"], {}).get(d, 0) for d in days],
         )
         for r in rows
