@@ -1,11 +1,11 @@
 name: Linear Sync
 
 # Cron polling architecture: there is no always-on server and no webhooks.
-# This job pulls from Linear and refreshes the rollups 3×/day, plus on demand.
+# This job pulls from Linear and refreshes the rollups every 3 hours, plus on demand.
 on:
   schedule:
-    # 06:00, 13:00, 20:00 UTC daily
-    - cron: "0 6,13,20 * * *"
+    # Every 3 hours, on the hour (00:00, 03:00, … 21:00 UTC)
+    - cron: "0 */3 * * *"
   workflow_dispatch: {}
 
 # Never let two syncs overlap (they share the sync_state watermark).

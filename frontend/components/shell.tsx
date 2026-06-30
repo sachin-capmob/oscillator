@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useState } from "react";
-import { TabGroup, TabList, Tab } from "@tremor/react";
 
 import type { Range } from "@/lib/types";
 import { todayUTC } from "@/lib/dates";
 import { DateScrubber } from "@/components/date-scrubber";
+import { Segmented } from "@/components/segmented";
 
 const RANGES: Range[] = ["day", "week", "month"];
 
@@ -32,7 +32,7 @@ const NAV = [
   { href: "/", label: "Overview" },
   { href: "/trends", label: "Trends" },
   { href: "/people", label: "People" },
-  { href: "/teams", label: "Teams & Cycles" },
+  { href: "/teams", label: "Cycles" },
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {
@@ -58,53 +58,87 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     <RangeContext.Provider value={{ range, setRange, anchor, setAnchor }}>
-      <div className="min-h-screen">
-        <header className="sticky top-0 z-20 border-b border-tremor-border bg-tremor-background-muted/80 backdrop-blur-md">
-          <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-6">
-              <Link href="/" className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-tremor-brand shadow-[0_0_12px_2px] shadow-indigo-500/50" />
-                <span className="text-tremor-title font-semibold tracking-tight text-tremor-content-strong">
-                  OSCILLATOR
-                </span>
-              </Link>
-              <nav className="flex flex-wrap gap-1">
-                {NAV.map((item) => {
-                  const active = pathname === item.href;
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={`rounded-tremor-small px-3 py-1.5 text-tremor-default transition-colors ${
-                        active
-                          ? "bg-tremor-brand-faint font-medium text-tremor-content-strong ring-1 ring-inset ring-tremor-border"
-                          : "text-tremor-content hover:bg-tremor-background-subtle hover:text-tremor-content-emphasis"
-                      }`}
-                    >
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </nav>
-            </div>
-            <TabGroup
-              index={RANGES.indexOf(range)}
-              onIndexChange={(i) => setRange(RANGES[i])}
-              className="w-fit"
+      <div className="min-h-screen bg-void">
+        {/* Top navigation rail — 56px, --edge bottom border only. Inner content
+            is centered to the same max-width gutter as the page body. */}
+        <header className="sticky top-0 z-30 h-14 border-b border-edge bg-void">
+          <div className="mx-auto flex h-full max-w-[1600px] items-stretch px-6 lg:px-10">
+            <Link
+              href="/"
+              className="-ml-1 flex items-center gap-3 pr-10 text-[14px] font-semibold tracking-eyebrow text-ink"
             >
-              <TabList variant="solid">
-                <Tab>Day</Tab>
-                <Tab>Week</Tab>
-                <Tab>Month</Tab>
-              </TabList>
-            </TabGroup>
-          </div>
-          <div className="mx-auto max-w-7xl px-4 pb-3">
-            <DateScrubber />
+              <span
+                className="inline-block h-2 w-2"
+                style={{ background: "var(--signal)" }}
+                aria-hidden
+              />
+              OSCILLATOR
+            </Link>
+            <nav className="flex items-stretch gap-1">
+              {NAV.map((item) => {
+                const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className="relative flex items-center px-5 text-nav font-medium transition-colors hover:text-ink"
+                    style={{ color: active ? "var(--ink)" : "var(--muted)" }}
+                  >
+                    {item.label}
+                    {active && (
+                      <span
+                        className="absolute inset-x-4 -bottom-px h-0.5"
+                        style={{ background: "var(--signal)" }}
+                        aria-hidden
+                      />
+                    )}
+                  </Link>
+                );
+              })}
+            </nav>
           </div>
         </header>
-        <main className="mx-auto max-w-7xl px-4 py-6">{children}</main>
+
+        {/* Command bar — 52px, --surface; range selector + scrubber share the
+            centered gutter so controls line up with the content below. */}
+        <div className="sticky top-14 z-20 border-b border-edge bg-surface">
+          <div className="mx-auto flex h-[52px] max-w-[1600px] items-center px-6 lg:px-10">
+            <Eyebrowed label="RANGE">
+              <Segmented
+                options={[
+                  { value: "day", label: "Day" },
+                  { value: "week", label: "Week" },
+                  { value: "month", label: "Month" },
+                ]}
+                value={range}
+                onChange={(v) => setRange(v as Range)}
+              />
+            </Eyebrowed>
+          </div>
+        </div>
+
+        {/* Date scrubber strip — the secondary control rail */}
+        <div className="border-b border-edge bg-void">
+          <div className="mx-auto max-w-[1600px] px-6 lg:px-10">
+            <DateScrubber />
+          </div>
+        </div>
+
+        {/* Content — centered, generous gutters + vertical rhythm so panels
+            breathe instead of bleeding edge-to-edge. */}
+        <main className="mx-auto min-h-[60vh] max-w-[1600px] px-6 py-8 lg:px-10 lg:py-10">
+          {children}
+        </main>
       </div>
     </RangeContext.Provider>
+  );
+}
+
+function Eyebrowed({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3.5">
+      <span className="eyebrow">{label}</span>
+      {children}
+    </div>
   );
 }

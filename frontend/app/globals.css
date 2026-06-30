@@ -2,34 +2,160 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================================
+   CADENCE — design tokens. Change a value here and the whole UI re-themes.
+   Six colors, no more. #FF6B6B is the single permitted exception, reserved
+   strictly for negative deltas / scope-added.
+   ============================================================================ */
 :root {
+  --void: #080b0f; /* near-black, blue undertone — viewport + nav */
+  --surface: #0e1117; /* primary panel/card background */
+  --edge: #1c2333; /* borders, dividers, separators */
+  --signal: #4fffb0; /* THE accent — pale electric mint, used sparingly */
+  --ink: #e8edf5; /* primary text, cool white */
+  --muted: #4a5568; /* secondary labels, timestamps, de-emphasized data */
+  --negative: #ff6b6b; /* permitted exception: negative deltas only */
+
+  --signal-rgb: 79, 255, 176;
+
   color-scheme: dark;
+}
+
+/* Fonts are injected as CSS variables by next/font in layout.tsx:
+   --font-mono (DM Mono) and --font-sans (Inter). */
+
+* {
+  box-sizing: border-box;
+  border-radius: 0; /* the signature: sharp corners everywhere */
 }
 
 html,
 body {
-  @apply bg-tremor-background-muted text-tremor-content antialiased;
+  margin: 0;
+  padding: 0;
+  background: var(--void);
+  color: var(--ink);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* Subtle ambient glow so the dark page has depth without distracting. */
-body {
-  min-height: 100vh;
-  background-image:
-    radial-gradient(60rem 40rem at 100% -10%, rgba(99, 102, 241, 0.08), transparent 60%),
-    radial-gradient(50rem 36rem at -10% 0%, rgba(56, 189, 248, 0.05), transparent 55%);
-  background-attachment: fixed;
-  background-repeat: no-repeat;
+/* ---- Typography roles ---------------------------------------------------- */
+.font-mono {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-feature-settings: "tnum" 1; /* tabular numerals */
 }
 
-/* Tasteful scrollbars on dark. */
+/* 10px ALL CAPS tracked eyebrow / column header */
+.eyebrow {
+  font-family: var(--font-sans), sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+/* ---- Selection + scrollbars --------------------------------------------- */
+::selection {
+  background: rgba(var(--signal-rgb), 0.25);
+  color: var(--ink);
+}
+
 * {
-  scrollbar-color: #2a2e3a transparent;
+  scrollbar-color: var(--edge) transparent;
 }
 *::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #2a2e3a;
-  border-radius: 9999px;
+  background: var(--edge);
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---- Focus: 1px signal outline, 2px offset, on every interactive el ------ */
+a:focus-visible,
+button:focus-visible,
+[tabindex]:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 1px solid var(--signal);
+  outline-offset: 2px;
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ============================================================================
+   Loading bar — a 1px --signal line sweeps left→right across a panel's top.
+   No spinners anywhere. Apply <div class="loadbar" /> as the first child of a
+   relatively-positioned panel.
+   ============================================================================ */
+.loadbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 1px;
+  width: 100%;
+  overflow: hidden;
+  background: transparent;
+  z-index: 5;
+}
+.loadbar::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 40%;
+  background: var(--signal);
+  box-shadow: 0 0 6px 0 rgba(var(--signal-rgb), 0.7);
+  animation: loadbar-sweep 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes loadbar-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+/* ============================================================================
+   KPI count-up landing pulse — the --signal flashes once as the digit lands.
+   Triggered by toggling .kpi-pulse on the number element.
+   ============================================================================ */
+@keyframes kpi-land {
+  0% {
+    color: var(--signal);
+    text-shadow: 0 0 14px rgba(var(--signal-rgb), 0.6);
+  }
+  60% {
+    color: var(--signal);
+    text-shadow: 0 0 6px rgba(var(--signal-rgb), 0.2);
+  }
+  100% {
+    color: var(--ink);
+    text-shadow: none;
+  }
+}
+.kpi-pulse {
+  animation: kpi-land 0.5s ease-out forwards;
+}
+
+/* Recharts: kill the default focus outline on the surface, keep our tooltip clean */
+.recharts-surface:focus {
+  outline: none;
+}
+.recharts-default-tooltip {
+  background: var(--surface) !important;
+  border: 1px solid var(--edge) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
 }
