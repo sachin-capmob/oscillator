@@ -78,7 +78,9 @@ export default function OverviewPage() {
         title="Overview"
         description={
           o
-            ? `${cap(range)} of ${formatDate(o.period_start)} — compared against the previous ${range}.`
+            ? range === "all"
+              ? "All time — every issue on record, no prior-period comparison."
+              : `${cap(range)} of ${formatDate(o.period_start)} — compared against the previous ${range}.`
             : "Loading the current period…"
         }
       >

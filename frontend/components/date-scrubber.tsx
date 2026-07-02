@@ -13,7 +13,7 @@ import { useRange } from "@/components/shell";
 import { periodLabel, relativeLabel } from "@/lib/dates";
 import type { ThroughputResp } from "@/lib/types";
 
-const VISIBLE: Record<string, number> = { day: 24, week: 12, month: 12 };
+const VISIBLE: Record<string, number> = { day: 24, week: 12, month: 12, all: 36 };
 
 export function DateScrubber() {
   const { range, anchor, setAnchor } = useRange();
@@ -46,8 +46,8 @@ export function DateScrubber() {
         {Array.from({ length: 24 }).map((_, i) => (
           <div
             key={i}
-            className="flex-1 bg-edge"
-            style={{ height: `${8 + ((i * 7) % 26)}px`, opacity: 0.5 }}
+            className="flex-1 bg-muted"
+            style={{ height: `${8 + ((i * 7) % 26)}px`, opacity: 0.4 }}
           />
         ))}
       </div>
@@ -88,10 +88,10 @@ export function DateScrubber() {
               style={{ height: "44px" }}
             >
               <span
-                className="absolute inset-x-0 bottom-0 transition-colors group-hover:opacity-80"
+                className="absolute inset-x-0 bottom-0 transition-colors group-hover:bg-ink"
                 style={{
                   height: `${h}px`,
-                  background: isSel ? "var(--signal)" : "var(--edge)",
+                  background: isSel ? "var(--signal)" : "var(--muted)",
                 }}
               />
             </button>

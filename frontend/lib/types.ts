@@ -1,6 +1,6 @@
 // Response types mirroring the backend Pydantic schemas (app/schemas/insights.py).
 
-export type Range = "day" | "week" | "month";
+export type Range = "day" | "week" | "month" | "all";
 
 export interface Metric {
   current: number | null;

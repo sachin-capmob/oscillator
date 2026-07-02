@@ -12,6 +12,7 @@ class Range(StrEnum):
     day = "day"
     week = "week"
     month = "month"
+    all = "all"
 
 
 class Metric(BaseModel):

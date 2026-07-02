@@ -9,7 +9,7 @@ import { todayUTC } from "@/lib/dates";
 import { DateScrubber } from "@/components/date-scrubber";
 import { Segmented } from "@/components/segmented";
 
-const RANGES: Range[] = ["day", "week", "month"];
+const RANGES: Range[] = ["day", "week", "month", "all"];
 
 interface RangeCtx {
   range: Range;
@@ -109,6 +109,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   { value: "day", label: "Day" },
                   { value: "week", label: "Week" },
                   { value: "month", label: "Month" },
+                  { value: "all", label: "All" },
                 ]}
                 value={range}
                 onChange={(v) => setRange(v as Range)}

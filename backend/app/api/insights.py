@@ -42,9 +42,32 @@ TREND = {
     Range.day: {"unit": "day", "since": "30 days", "step": "1 day"},
     Range.week: {"unit": "week", "since": "84 days", "step": "1 week"},
     Range.month: {"unit": "month", "since": "365 days", "step": "1 month"},
+    # "all" aggregates the full history; monthly buckets spanning up to 100 years
+    # cover every plausible dataset while keeping the trend charts readable.
+    Range.all: {"unit": "month", "since": "36500 days", "step": "1 month", "all": True},
 }
 
 CYCLE_HOURS = "extract(epoch FROM completed_at - started_at) / 3600.0"
+
+
+def _spine_start(cfg: dict) -> str:
+    """SQL expression for the low bound of a trend spine's generate_series.
+
+    Normally `anchor - <since>`. For the all-time range that lookback (100y)
+    would emit ~1200 mostly-empty buckets, so instead we start at the first
+    period that actually has data — clamped to at most `since` back so the
+    series can never be unbounded."""
+    floor = (
+        f"date_trunc('{cfg['unit']}', CAST(:anchor AS timestamptz)) - interval '{cfg['since']}'"
+    )
+    if cfg.get("all"):
+        return (
+            "GREATEST("
+            f"{floor}, "
+            f"date_trunc('{cfg['unit']}', "
+            "(SELECT min(least(created_at, completed_at)) FROM issues)))"
+        )
+    return floor
 
 # `range` is used as a query-param name on the endpoints, which shadows the
 # builtin inside those functions; capture it here for internal use.
@@ -63,9 +86,30 @@ def _ref(anchor: date | None) -> datetime:
     return datetime(anchor.year, anchor.month, anchor.day, tzinfo=UTC)
 
 
+def _anchor_ts(ref: datetime) -> datetime:
+    """UTC-aware midnight-of-`ref` for binding into the trend spines.
+
+    The DB session runs in UTC (see db.py). Binding a bare `date` (or a naive
+    datetime) makes asyncpg encode it against the process's local zone, so under
+    a UTC session `CAST(:anchor AS timestamptz)` lands on the *previous* UTC day
+    — pushing every bucket one day behind (the "today shows as yesterday" bug).
+    An explicit UTC-aware datetime encodes unambiguously as UTC midnight, which
+    matches how the data columns are bucketed."""
+    return ref.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=UTC)
+
+
+# Sentinel bounds for the all-time window: a floor well before any real data and
+# a ceiling well after "now", so range filters become effectively unbounded.
+_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+_FAR_FUTURE = datetime(2100, 1, 1, tzinfo=UTC)
+
+
 def _period_bounds(rng: Range, now: datetime) -> tuple[datetime, datetime, datetime, datetime]:
     """(cur_start, cur_end, prev_start, prev_end) for the given range."""
     midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if rng is Range.all:
+        # All time. No prior period to compare against, so prev is an empty window.
+        return _EPOCH, _FAR_FUTURE, _EPOCH, _EPOCH
     if rng is Range.day:
         cur_start = midnight
         cur_end = cur_start + timedelta(days=1)
@@ -173,8 +217,7 @@ async def throughput(
                 WITH spine AS (
                   SELECT gs::date AS period
                   FROM generate_series(
-                    date_trunc('{cfg["unit"]}', CAST(:anchor AS timestamptz))
-                      - interval '{cfg["since"]}',
+                    {_spine_start(cfg)},
                     date_trunc('{cfg["unit"]}', CAST(:anchor AS timestamptz)),
                     interval '{cfg["step"]}'
                   ) gs
@@ -197,7 +240,7 @@ async def throughput(
                 ORDER BY s.period
                 """
             ),
-            {"anchor": _ref(anchor).date()},
+            {"anchor": _anchor_ts(_ref(anchor))},
         )
     ).mappings().all()
     return ThroughputResponse(
@@ -259,8 +302,7 @@ async def throughput_by_actor(
                 WITH spine AS (
                   SELECT gs::date AS period
                   FROM generate_series(
-                    date_trunc('{cfg["unit"]}', CAST(:anchor AS timestamptz))
-                      - interval '{cfg["since"]}',
+                    {_spine_start(cfg)},
                     date_trunc('{cfg["unit"]}', CAST(:anchor AS timestamptz)),
                     interval '{cfg["step"]}'
                   ) gs
@@ -279,7 +321,7 @@ async def throughput_by_actor(
                 ORDER BY a_id, s.period
                 """
             ),
-            {"anchor": ref.date(), "actor_ids": actor_ids},
+            {"anchor": _anchor_ts(ref), "actor_ids": actor_ids},
         )
     ).mappings().all()
 
@@ -291,8 +333,7 @@ async def throughput_by_actor(
                 WITH spine AS (
                   SELECT gs::date AS period
                   FROM generate_series(
-                    date_trunc('{cfg["unit"]}', CAST(:anchor AS timestamptz))
-                      - interval '{cfg["since"]}',
+                    {_spine_start(cfg)},
                     date_trunc('{cfg["unit"]}', CAST(:anchor AS timestamptz)),
                     interval '{cfg["step"]}'
                   ) gs
@@ -311,7 +352,7 @@ async def throughput_by_actor(
                 ORDER BY a_id, s.period
                 """
             ),
-            {"anchor": ref.date(), "actor_ids": actor_ids},
+            {"anchor": _anchor_ts(ref), "actor_ids": actor_ids},
         )
     ).mappings().all()
 
@@ -364,8 +405,7 @@ async def cycle_time(
                 WITH spine AS (
                   SELECT gs::date AS period
                   FROM generate_series(
-                    date_trunc('{cfg["unit"]}', CAST(:anchor AS timestamptz))
-                      - interval '{cfg["since"]}',
+                    {_spine_start(cfg)},
                     date_trunc('{cfg["unit"]}', CAST(:anchor AS timestamptz)),
                     interval '{cfg["step"]}'
                   ) gs
@@ -383,7 +423,7 @@ async def cycle_time(
                 ORDER BY s.period
                 """
             ),
-            {"anchor": _ref(anchor).date()},
+            {"anchor": _anchor_ts(_ref(anchor))},
         )
     ).mappings().all()
     return CycleTimeResponse(
@@ -430,8 +470,7 @@ async def wip(
                 WITH spine AS (
                   SELECT gs AS period_start, gs + interval '{cfg["step"]}' AS period_end
                   FROM generate_series(
-                    date_trunc('{cfg["unit"]}', CAST(:anchor AS timestamptz))
-                      - interval '{cfg["since"]}',
+                    {_spine_start(cfg)},
                     date_trunc('{cfg["unit"]}', CAST(:anchor AS timestamptz)),
                     interval '{cfg["step"]}'
                   ) gs
@@ -446,7 +485,7 @@ async def wip(
                 FROM spine s ORDER BY s.period_start
                 """
             ),
-            {"anchor": ref.date()},
+            {"anchor": _anchor_ts(ref)},
         )
     ).mappings().all()
     return WipResponse(
@@ -535,31 +574,64 @@ async def by_team(
     session: AsyncSession = Depends(get_session),
 ) -> ByTeamResponse:
     ref = _ref(anchor)
-    if range is Range.month:
+    if range is Range.all:
+        # All time: aggregate the full monthly rollup per team. Throughput/comments/
+        # scope sum; avg cycle is throughput-weighted; wip is a snapshot so we take
+        # the latest month's value; a true all-time median isn't derivable from
+        # per-month medians, so it's left null.
         view, col = "monthly_team_rollup", "month_start"
-        period_start = ref.date().replace(day=1)
+        period_start = _EPOCH.date()
+        rows = (
+            await session.execute(
+                text(
+                    """
+                    SELECT t.id AS team_id, t.name, t.key,
+                      COALESCE(sum(r.throughput), 0)::int AS throughput,
+                      CASE WHEN COALESCE(sum(r.throughput), 0) > 0
+                           THEN sum(r.avg_cycle_hours * r.throughput)
+                                / NULLIF(sum(r.throughput), 0)
+                      END AS avg_cycle_hours,
+                      NULL::double precision AS median_cycle_hours,
+                      COALESCE(
+                        (array_agg(r.wip ORDER BY r.month_start DESC)
+                           FILTER (WHERE r.wip IS NOT NULL))[1], 0
+                      )::int AS wip,
+                      COALESCE(sum(r.comments), 0)::int AS comments,
+                      COALESCE(sum(r.scope_added), 0)::int AS scope_added
+                    FROM teams t
+                    LEFT JOIN monthly_team_rollup r ON r.team_id = t.id
+                    GROUP BY t.id, t.name, t.key
+                    ORDER BY throughput DESC, t.name
+                    """
+                ),
+            )
+        ).mappings().all()
     else:
-        view, col = "weekly_team_rollup", "week_start"
-        period_start = ref.date() - timedelta(days=ref.weekday())
+        if range is Range.month:
+            view, col = "monthly_team_rollup", "month_start"
+            period_start = ref.date().replace(day=1)
+        else:
+            view, col = "weekly_team_rollup", "week_start"
+            period_start = ref.date() - timedelta(days=ref.weekday())
 
-    rows = (
-        await session.execute(
-            text(
-                f"""
-                SELECT t.id AS team_id, t.name, t.key,
-                  COALESCE(r.throughput, 0)::int AS throughput,
-                  r.avg_cycle_hours, r.median_cycle_hours,
-                  COALESCE(r.wip, 0)::int AS wip,
-                  COALESCE(r.comments, 0)::int AS comments,
-                  COALESCE(r.scope_added, 0)::int AS scope_added
-                FROM teams t
-                LEFT JOIN {view} r ON r.team_id = t.id AND r.{col} = :period_start
-                ORDER BY throughput DESC, t.name
-                """
-            ),
-            {"period_start": period_start},
-        )
-    ).mappings().all()
+        rows = (
+            await session.execute(
+                text(
+                    f"""
+                    SELECT t.id AS team_id, t.name, t.key,
+                      COALESCE(r.throughput, 0)::int AS throughput,
+                      r.avg_cycle_hours, r.median_cycle_hours,
+                      COALESCE(r.wip, 0)::int AS wip,
+                      COALESCE(r.comments, 0)::int AS comments,
+                      COALESCE(r.scope_added, 0)::int AS scope_added
+                    FROM teams t
+                    LEFT JOIN {view} r ON r.team_id = t.id AND r.{col} = :period_start
+                    ORDER BY throughput DESC, t.name
+                    """
+                ),
+                {"period_start": period_start},
+            )
+        ).mappings().all()
 
     teams = [
         TeamStat(

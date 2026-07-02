@@ -48,7 +48,7 @@ export default function CyclesPage() {
     <div className="flex flex-col gap-12">
       <Section
         title="Cycles"
-        description={`Team velocity for the current ${range}. Bar = completed share of in-flight work.`}
+        description={`Team velocity ${range === "all" ? "across all time" : `for the current ${range}`}. Bar = completed share of in-flight work.`}
       >
         <Panel
           loading={loading}

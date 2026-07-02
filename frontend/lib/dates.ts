@@ -21,12 +21,14 @@ export function periodLabel(dateStr: string, range: Range): string {
   const day = String(d.getUTCDate()).padStart(2, "0");
   if (range === "day") return `${y}.${mo}.${day} · ${WEEKDAYS[d.getUTCDay()]}`;
   if (range === "week") return `WK OF ${MONTHS[d.getUTCMonth()]} ${day}`;
+  // "all" is bucketed by month, so it reads like the month label.
   return `${MONTHS[d.getUTCMonth()]} · ${y}`;
 }
 
 /** Relative offset of a tick from the most recent tick (the right edge / "now"). */
 export function relativeLabel(stepsFromNow: number, range: Range): string {
   if (stepsFromNow === 0) return "LIVE";
+  // "all" buckets by month, so its relative offset reads in months too.
   const u = range === "day" ? "d" : range === "week" ? "w" : "mo";
   return `−${stepsFromNow}${u}`;
 }
