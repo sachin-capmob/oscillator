@@ -110,3 +110,34 @@ export interface ByTeamResp {
   period_start: string;
   teams: TeamStat[];
 }
+
+export interface AnomalyItem {
+  scope: "workspace" | "team" | "actor";
+  entity_id: number | null;
+  entity_name: string | null;
+  metric: string; // throughput | cycle_time | wip | net_flow | created
+  period: string;
+  direction: "up" | "down";
+  severity: "warn" | "critical";
+  observed: number;
+  baseline: number;
+  stddev: number | null;
+  z_score: number;
+}
+
+export interface AnomaliesResp {
+  period: string;
+  count: number;
+  anomalies: AnomalyItem[];
+}
+
+export interface DigestResp {
+  range: Range;
+  anchor: string;
+  summary: string;
+  source: "groq" | "template";
+  model: string | null;
+  anomaly_count: number;
+  generated_at: string | null;
+  available: boolean;
+}

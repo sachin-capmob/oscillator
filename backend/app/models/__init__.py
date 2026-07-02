@@ -6,6 +6,7 @@ env.py imports it so autogenerate/`create_all` see the full schema.
 
 from app.models.core import Actor, Cycle, SyncState, Team
 from app.models.events import Comment, RawEvent
+from app.models.insights import Anomaly, Digest
 from app.models.issues import Issue, IssueHistory
 
 __all__ = [
@@ -17,4 +18,6 @@ __all__ = [
     "IssueHistory",
     "Comment",
     "RawEvent",
+    "Anomaly",
+    "Digest",
 ]

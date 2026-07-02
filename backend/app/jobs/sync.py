@@ -24,6 +24,8 @@ from app.db_partitions import ensure_partitions_around
 from app.linear.client import LinearClient
 from app.models import SyncState
 from app.services import normalizer
+from app.services.anomaly import detect_anomalies
+from app.services.digest import generate_digests
 
 logger = logging.getLogger("app.sync")
 
@@ -112,6 +114,21 @@ async def run_sync() -> dict:
     # --- refresh rollups ---
     views = await refresh_all_views(engine)
 
+    # --- derived analytics: anomaly flags + narrative digest ---
+    # Runs against the freshly refreshed rollups. Best-effort: an analytics or
+    # LLM hiccup must not fail the sync or block the watermark from advancing.
+    analytics: dict[str, int] = {"anomalies": 0, "digests": 0}
+    try:
+        async with Session() as session:
+            async with session.begin():
+                analytics["anomalies"] = await detect_anomalies(session)
+            async with session.begin():
+                analytics["digests"] = await generate_digests(
+                    session, anchor=run_start.date()
+                )
+    except Exception:  # noqa: BLE001 — analytics is non-critical to ingestion
+        logger.exception("Derived analytics failed (non-fatal)")
+
     # --- advance watermark only after full success ---
     async with Session() as session:
         async with session.begin():
@@ -119,7 +136,8 @@ async def run_sync() -> dict:
     logger.info("Watermark advanced to %s", run_start.isoformat())
 
     return {"mode": mode, "since": since, "watermark": run_start,
-            "pulled": pulled, "upserted": counts, "views_refreshed": views}
+            "pulled": pulled, "upserted": counts, "views_refreshed": views,
+            "analytics": analytics}
 
 
 def main() -> int:
@@ -138,6 +156,7 @@ def main() -> int:
     print(f"pulled:     {result['pulled']}")
     print(f"upserted:   {result['upserted']}")
     print(f"views:      {result['views_refreshed'] or '(none yet)'}")
+    print(f"analytics:  {result['analytics']}")
     return 0
 
 

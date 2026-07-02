@@ -1,11 +1,11 @@
 name: Linear Sync
 
 # Cron polling architecture: there is no always-on server and no webhooks.
-# This job pulls from Linear and refreshes the rollups every 3 hours, plus on demand.
+# This job pulls from Linear and refreshes the rollups every hour, plus on demand.
 on:
   schedule:
-    # Every 3 hours, on the hour (00:00, 03:00, … 21:00 UTC)
-    - cron: "0 */3 * * *"
+    # Every hour, on the hour (00:00, 01:00, … 23:00 UTC)
+    - cron: "0 * * * *"
   workflow_dispatch: {}
 
 # Never let two syncs overlap (they share the sync_state watermark).
@@ -43,7 +43,13 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           DB_SSL: "true"
+          # Powers the narrative digest (schema 0004: anomalies + digests).
+          # Optional — if the secret is unset the digest falls back to a
+          # deterministic templated summary; anomaly detection is unaffected.
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         # `python -m` puts backend/ on sys.path so `app` is importable.
         # A non-zero exit (any phase failed) fails the job loudly; the watermark
         # is NOT advanced, so the next run safely re-syncs the same window.
+        # After rollups, the sync also computes anomaly flags + digests
+        # (best-effort; an analytics/LLM failure does not fail the job).
         run: python -m app.jobs.sync

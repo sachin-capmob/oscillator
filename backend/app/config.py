@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     database_url: str = Field(default="")
     dashboard_auth_token: str = Field(default="")
 
+    # Groq (OpenAI-compatible) powers the narrative digest. When unset the
+    # digest degrades gracefully to a deterministic templated summary.
+    groq_api_key: str = Field(default="")
+    groq_model: str = Field(default="llama-3.3-70b-versatile")
+    groq_api_url: str = Field(default="https://api.groq.com/openai/v1/chat/completions")
+
     # --- App behavior ---
     environment: str = Field(default="development")
     # TLS for the DB connection. Required by Neon (keep true in prod); set
@@ -60,6 +66,10 @@ class Settings(BaseSettings):
     @property
     def database_configured(self) -> bool:
         return bool(self.database_url)
+
+    @property
+    def groq_configured(self) -> bool:
+        return bool(self.groq_api_key)
 
 
 @lru_cache

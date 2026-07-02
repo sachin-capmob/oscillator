@@ -3,6 +3,7 @@
 import { useInsight } from "@/lib/api";
 import { useRange } from "@/components/shell";
 import { AreaChart, type SeriesDef } from "@/components/charts";
+import { AttentionPanel, DigestBanner } from "@/components/digest";
 import {
   EmptyState,
   ErrorState,
@@ -84,6 +85,11 @@ export default function OverviewPage() {
             : "Loading the current period…"
         }
       >
+        {/* Narrative digest — what changed this period and why it matters */}
+        <div className="mb-6">
+          <DigestBanner />
+        </div>
+
         {/* KPI row — four spacious cards */}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
           <Kpi
@@ -106,6 +112,9 @@ export default function OverviewPage() {
           <Kpi label="Open issues" value={o?.open_issues ?? 0} unit="open" placeholder={loading || !o} />
         </div>
       </Section>
+
+      {/* Anomaly radar — self-hides when nothing is flagged this period */}
+      <AttentionPanel />
 
       {/* Primary analysis — throughput (8) + top contributors (4) */}
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">

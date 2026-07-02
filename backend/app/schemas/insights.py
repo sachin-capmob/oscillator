@@ -128,3 +128,38 @@ class ByTeamResponse(BaseModel):
     range: Range
     period_start: date
     teams: list[TeamStat]
+
+
+class AnomalyItem(BaseModel):
+    """A single flagged metric deviation."""
+
+    scope: str            # workspace | team | actor
+    entity_id: int | None = None
+    entity_name: str | None = None
+    metric: str           # throughput | cycle_time | wip | net_flow | created
+    period: date
+    direction: str        # up | down
+    severity: str         # warn | critical
+    observed: float
+    baseline: float
+    stddev: float | None = None
+    z_score: float
+
+
+class AnomaliesResponse(BaseModel):
+    period: date
+    count: int
+    anomalies: list[AnomalyItem]
+
+
+class DigestResponse(BaseModel):
+    range: Range
+    anchor: date
+    summary: str
+    source: str           # groq | template
+    model: str | None = None
+    anomaly_count: int
+    generated_at: datetime | None = None
+    # False when no digest has been generated yet (pre-first-sync). The UI can
+    # then hide the banner rather than show a stale/empty message.
+    available: bool = True
