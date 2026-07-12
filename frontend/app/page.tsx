@@ -3,7 +3,7 @@
 import { useInsight } from "@/lib/api";
 import { useRange } from "@/components/shell";
 import { AreaChart, type SeriesDef } from "@/components/charts";
-import { AttentionPanel, DigestBanner } from "@/components/digest";
+import { DigestBanner } from "@/components/digest";
 import {
   EmptyState,
   ErrorState,
@@ -32,12 +32,12 @@ const THR_SERIES: SeriesDef[] = [
 const WIP_SERIES: SeriesDef[] = [{ key: "WIP", name: "WIP", tone: "signal" }];
 
 export default function OverviewPage() {
-  const { range, anchor } = useRange();
-  const ov = useInsight<Overview>("overview", range, anchor);
-  const cyc = useInsight<CycleTimeResp>("cycle-time", range, anchor);
-  const thr = useInsight<ThroughputResp>("throughput", range, anchor);
-  const wip = useInsight<WipResp>("wip", range, anchor);
-  const actors = useInsight<ByActorResp>("by-actor", range, anchor);
+  const { range, anchor, refreshKey } = useRange();
+  const ov = useInsight<Overview>("overview", range, anchor, refreshKey);
+  const cyc = useInsight<CycleTimeResp>("cycle-time", range, anchor, refreshKey);
+  const thr = useInsight<ThroughputResp>("throughput", range, anchor, refreshKey);
+  const wip = useInsight<WipResp>("wip", range, anchor, refreshKey);
+  const actors = useInsight<ByActorResp>("by-actor", range, anchor, refreshKey);
 
   if (ov.error) {
     return (
@@ -112,9 +112,6 @@ export default function OverviewPage() {
           <Kpi label="Open issues" value={o?.open_issues ?? 0} unit="open" placeholder={loading || !o} />
         </div>
       </Section>
-
-      {/* Anomaly radar — self-hides when nothing is flagged this period */}
-      <AttentionPanel />
 
       {/* Primary analysis — throughput (8) + top contributors (4) */}
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">

@@ -141,3 +141,66 @@ export interface DigestResp {
   generated_at: string | null;
   available: boolean;
 }
+
+export interface ActorIssue {
+  issue_id: number;
+  title: string | null;
+  identifier: string | null;
+  team_name: string | null;
+  completed_at: string | null;
+  cycle_hours: number | null;
+}
+
+export interface ActorIssuesResp {
+  actor_id: number;
+  name: string | null;
+  email: string | null;
+  range: Range;
+  period_start: string;
+  period_end: string;
+  issues: ActorIssue[];
+}
+
+// ---------------------------------------------------------------------------
+// Time tracking
+// ---------------------------------------------------------------------------
+
+export interface ActorDropdown {
+  actor_id: number;
+  name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+}
+
+export interface TimeEntry {
+  id: number;
+  actor_id: number;
+  actor_name: string | null;
+  actor_email: string | null;
+  started_at: string;      // ISO datetime
+  stopped_at: string | null;
+  duration_secs: number | null;
+  note: string | null;
+}
+
+export interface ActiveTimerResp {
+  entry: TimeEntry | null;
+}
+
+export interface TimeLogResp {
+  entries: TimeEntry[];
+  total: number;
+}
+
+export interface TimeSummaryItem {
+  actor_id: number;
+  actor_name: string | null;
+  actor_email: string | null;
+  total_secs: number;
+  session_count: number;
+}
+
+export interface TimeSummaryResp {
+  items: TimeSummaryItem[];
+}
+

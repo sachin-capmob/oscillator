@@ -17,6 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_token
 from app.db import get_session
 from app.schemas.insights import (
+    ActorIssue,
+    ActorIssuesResponse,
     ActorStat,
     ActorThroughputPoint,
     ActorThroughputStat,
@@ -735,3 +737,71 @@ async def digest(
             available=False,
         )
     return DigestResponse(**row, available=True)
+
+
+@router.get("/actor-issues", response_model=ActorIssuesResponse)
+async def actor_issues(
+    actor_id: int = Query(...),
+    range: Range = Query(default=Range.week),
+    anchor: date | None = Query(default=None),
+    session: AsyncSession = Depends(get_session),
+) -> ActorIssuesResponse:
+    """Return all issues closed (completed) by a specific actor in the selected window."""
+    ref = _ref(anchor)
+    cs, ce, _, _ = _period_bounds(range, ref)
+
+    # Actor metadata
+    actor_row = (
+        await session.execute(
+            text("SELECT id, name, email FROM actors WHERE id = :id"),
+            {"id": actor_id},
+        )
+    ).mappings().first()
+
+    # Issues completed by this actor in the window
+    rows = (
+        await session.execute(
+            text(
+                f"""
+                SELECT
+                  i.id AS issue_id,
+                  i.title,
+                  i.identifier,
+                  t.name AS team_name,
+                  i.completed_at,
+                  CASE WHEN i.started_at IS NOT NULL
+                       THEN extract(epoch FROM i.completed_at - i.started_at) / 3600.0
+                  END AS cycle_hours
+                FROM issues i
+                LEFT JOIN teams t ON t.id = i.team_id
+                WHERE i.assignee_id = :actor_id
+                  AND i.completed_at >= :cs
+                  AND i.completed_at < :ce
+                ORDER BY i.completed_at DESC
+                """
+            ),
+            {"actor_id": actor_id, "cs": cs, "ce": ce},
+        )
+    ).mappings().all()
+
+    issues = [
+        ActorIssue(
+            issue_id=r["issue_id"],
+            title=r["title"],
+            identifier=r["identifier"],
+            team_name=r["team_name"],
+            completed_at=r["completed_at"],
+            cycle_hours=round(r["cycle_hours"], 2) if r["cycle_hours"] is not None else None,
+        )
+        for r in rows
+    ]
+
+    return ActorIssuesResponse(
+        actor_id=actor_id,
+        name=actor_row["name"] if actor_row else None,
+        email=actor_row["email"] if actor_row else None,
+        range=range,
+        period_start=cs,
+        period_end=ce,
+        issues=issues,
+    )

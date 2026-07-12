@@ -74,5 +74,7 @@ async def ready() -> dict[str, object]:
 
 
 from app.api import insights  # noqa: E402
+from app.api import time_tracking  # noqa: E402
 
 app.include_router(insights.router)
+app.include_router(time_tracking.router)

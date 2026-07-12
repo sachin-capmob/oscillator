@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useCallback } from "react";
 
 import type { Range } from "@/lib/types";
 import { todayUTC } from "@/lib/dates";
@@ -16,12 +16,16 @@ interface RangeCtx {
   setRange: (r: Range) => void;
   anchor: string; // YYYY-MM-DD — the day/week/month the dashboard is focused on
   setAnchor: (d: string) => void;
+  refreshKey: number;
+  refresh: () => void;
 }
 const RangeContext = createContext<RangeCtx>({
   range: "week",
   setRange: () => {},
   anchor: todayUTC(),
   setAnchor: () => {},
+  refreshKey: 0,
+  refresh: () => {},
 });
 
 export function useRange(): RangeCtx {
@@ -33,12 +37,15 @@ const NAV = [
   { href: "/trends", label: "Trends" },
   { href: "/people", label: "People" },
   { href: "/teams", label: "Cycles" },
+  { href: "/time", label: "Time" },
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [range, setRangeState] = useState<Range>("week");
   const [anchor, setAnchor] = useState<string>(todayUTC());
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     // URL params win (deep-linkable), then fall back to the saved range.
@@ -56,8 +63,16 @@ export function Shell({ children }: { children: React.ReactNode }) {
     window.localStorage.setItem("range", r);
   };
 
+  const refresh = useCallback(() => {
+    setRefreshing(true);
+    setRefreshKey((k) => k + 1);
+    // Visual feedback: keep the spinner for 1 second minimum so the user
+    // knows the refresh was triggered, even if data comes back instantly.
+    setTimeout(() => setRefreshing(false), 1000);
+  }, []);
+
   return (
-    <RangeContext.Provider value={{ range, setRange, anchor, setAnchor }}>
+    <RangeContext.Provider value={{ range, setRange, anchor, setAnchor, refreshKey, refresh }}>
       <div className="min-h-screen bg-void">
         {/* Top navigation rail — 56px, --edge bottom border only. Inner content
             is centered to the same max-width gutter as the page body. */}
@@ -102,7 +117,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         {/* Command bar — 52px, --surface; range selector + scrubber share the
             centered gutter so controls line up with the content below. */}
         <div className="sticky top-14 z-20 border-b border-edge bg-surface">
-          <div className="mx-auto flex h-[52px] max-w-[1600px] items-center px-6 lg:px-10">
+          <div className="mx-auto flex h-[52px] max-w-[1600px] items-center gap-6 px-6 lg:px-10">
             <Eyebrowed label="RANGE">
               <Segmented
                 options={[
@@ -115,6 +130,43 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 onChange={(v) => setRange(v as Range)}
               />
             </Eyebrowed>
+
+            {/* Spacer pushes the refresh button to the right */}
+            <div className="flex-1" />
+
+            <button
+              id="refresh-data-btn"
+              onClick={refresh}
+              disabled={refreshing}
+              aria-label="Refresh dashboard data"
+              className="flex items-center gap-2 rounded px-3 py-1.5 text-[12px] font-medium tracking-eyebrow transition-all"
+              style={{
+                color: refreshing ? "var(--muted)" : "var(--signal)",
+                border: "1px solid",
+                borderColor: refreshing ? "var(--edge)" : "var(--signal)",
+                opacity: refreshing ? 0.6 : 1,
+                cursor: refreshing ? "not-allowed" : "pointer",
+              }}
+            >
+              {/* Spinner or static icon */}
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 16 16"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                style={{
+                  animation: refreshing ? "spin 0.8s linear infinite" : "none",
+                  color: "inherit",
+                }}
+              >
+                <path
+                  d="M13.65 2.35A8 8 0 1 0 15 8h-2a6 6 0 1 1-1.05-3.39L9 7h6V1l-1.35 1.35Z"
+                  fill="currentColor"
+                />
+              </svg>
+              {refreshing ? "Refreshing…" : "Refresh"}
+            </button>
           </div>
         </div>
 
@@ -131,6 +183,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
+
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </RangeContext.Provider>
   );
 }

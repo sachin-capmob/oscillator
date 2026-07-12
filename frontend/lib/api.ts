@@ -28,8 +28,8 @@ export interface AsyncState<T> {
   error: string | null;
 }
 
-/** Fetch an insights endpoint, re-fetching whenever range or anchor changes. */
-export function useInsight<T>(path: string, range: Range, anchor?: string): AsyncState<T> {
+/** Fetch an insights endpoint, re-fetching whenever range, anchor, or refreshKey changes. */
+export function useInsight<T>(path: string, range: Range, anchor?: string, refreshKey?: number): AsyncState<T> {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +44,21 @@ export function useInsight<T>(path: string, range: Range, anchor?: string): Asyn
     return () => {
       alive = false;
     };
-  }, [path, range, anchor]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path, range, anchor, refreshKey]);
 
   return { data, loading, error };
+}
+
+/** Fetch issues closed by a specific actor in the selected range. */
+export async function fetchActorIssues(
+  actorId: number,
+  range: Range,
+  anchor?: string,
+) {
+  const qs = new URLSearchParams({ actor_id: String(actorId), range });
+  if (anchor) qs.set("anchor", anchor);
+  const res = await fetch(`/api/insights/actor-issues?${qs.toString()}`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`actor-issues failed (${res.status})`);
+  return res.json();
 }

@@ -163,3 +163,24 @@ class DigestResponse(BaseModel):
     # False when no digest has been generated yet (pre-first-sync). The UI can
     # then hide the banner rather than show a stale/empty message.
     available: bool = True
+
+
+class ActorIssue(BaseModel):
+    """A single issue closed by an actor in the selected window."""
+
+    issue_id: int
+    title: str | None = None
+    identifier: str | None = None   # e.g. "ENG-123"
+    team_name: str | None = None
+    completed_at: datetime | None = None
+    cycle_hours: float | None = None  # hours from started_at → completed_at
+
+
+class ActorIssuesResponse(BaseModel):
+    actor_id: int
+    name: str | None = None
+    email: str | None = None
+    range: Range
+    period_start: datetime
+    period_end: datetime
+    issues: list[ActorIssue]
