@@ -2,9 +2,12 @@
 still need to count toward throughput, WIP, and per-person/team tallies.
 
 Custom issues are stored as ordinary rows in the `issues` table with
-`source = 'custom'`, so every existing insights query (overview, throughput,
-by-actor, by-team) picks them up automatically alongside synced Linear
-issues — no separate aggregation path.
+`source = 'custom'`, so queries that read `issues` directly (overview,
+throughput-by-actor) pick them up automatically. `by-actor`'s tally reads
+the `daily_actor_rollup` materialized view instead, which the cron sync
+refreshes on its own schedule — so create/update/delete here also
+refresh that view directly (see `_refresh_actor_rollup`) to keep the
+People page in sync immediately.
 
 Endpoints:
   GET    /api/custom-issues/actors          — all known actors (for the dropdown)
@@ -24,7 +27,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_token
-from app.db import get_session
+from app.db import get_engine, get_session
 from app.schemas.custom_issues import (
     ActorOut,
     CustomIssueCreate,
@@ -45,6 +48,19 @@ IDENTIFIER_PREFIX = "INT"  # "internal" — distinguishes custom issues from Lin
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+async def _refresh_actor_rollup() -> None:
+    """Keep the People page's throughput tally in sync with custom issues.
+
+    daily_actor_rollup is otherwise only refreshed by the ~3h cron sync, so
+    without this a custom issue's completion wouldn't show up in the People
+    table/page until the next scheduled run.
+    """
+    engine = get_engine()
+    ac_engine = engine.execution_options(isolation_level="AUTOCOMMIT")
+    async with ac_engine.connect() as conn:
+        await conn.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY daily_actor_rollup"))
 
 
 def _status_timestamps(status_: CustomIssueStatus, now: datetime) -> dict:
@@ -182,6 +198,7 @@ async def create_custom_issue(
         )
     ).mappings().one()
     await session.commit()
+    await _refresh_actor_rollup()
 
     actor = (
         await session.execute(
@@ -245,6 +262,8 @@ async def update_custom_issue(
         )
     ).mappings().one()
     await session.commit()
+    if body.status is not None:
+        await _refresh_actor_rollup()
 
     actor = (
         await session.execute(
@@ -274,3 +293,4 @@ async def delete_custom_issue(
     if result.rowcount == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Custom issue not found.")
     await session.commit()
+    await _refresh_actor_rollup()
