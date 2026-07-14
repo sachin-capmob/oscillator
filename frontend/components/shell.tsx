@@ -37,7 +37,7 @@ const NAV = [
   { href: "/trends", label: "Trends" },
   { href: "/people", label: "People" },
   { href: "/teams", label: "Cycles" },
-  { href: "/time", label: "Time" },
+  { href: "/issues", label: "Issues" },
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {

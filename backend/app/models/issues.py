@@ -37,6 +37,7 @@ class Issue(Base, TimestampMixin):
         Index("ix_issues_completed_at", "completed_at"),
         Index("ix_issues_cycle_id", "cycle_id"),
         Index("ix_issues_updated_at", "updated_at"),
+        Index("ix_issues_source", "source"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
@@ -63,6 +64,8 @@ class Issue(Base, TimestampMixin):
     priority: Mapped[int | None] = mapped_column(Integer)  # 0=none .. 4=low
     estimate: Mapped[float | None] = mapped_column(Float)
     project_id: Mapped[str | None] = mapped_column(String(64))  # Linear project id (no FK in v1)
+    # 'linear' (synced) | 'custom' (manually tracked, e.g. "set up AWS")
+    source: Mapped[str] = mapped_column(String(16), server_default="linear", nullable=False)
 
     # Linear's own lifecycle timestamps
     created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

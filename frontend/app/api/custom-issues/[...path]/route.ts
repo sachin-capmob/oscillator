@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Server-side proxy to the FastAPI time-tracking API. Mirrors the insights
+// Server-side proxy to the FastAPI custom-issues API. Mirrors the insights
 // proxy pattern — bearer token is injected server-side so it never reaches
 // the browser. Forwards the full path + query string + request body as-is.
 
@@ -16,7 +16,7 @@ async function proxy(req: NextRequest, params: { path: string[] }) {
 
   try {
     const body = method !== "GET" && method !== "HEAD" ? await req.text() : undefined;
-    const upstream = await fetch(`${API_BASE_URL}/api/time/${path}${search}`, {
+    const upstream = await fetch(`${API_BASE_URL}/api/custom-issues/${path}${search}`, {
       method,
       headers: {
         Authorization: `Bearer ${TOKEN}`,
@@ -43,5 +43,13 @@ export async function GET(req: NextRequest, { params }: { params: { path: string
 }
 
 export async function POST(req: NextRequest, { params }: { params: { path: string[] } }) {
+  return proxy(req, params);
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: { path: string[] } }) {
+  return proxy(req, params);
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: { path: string[] } }) {
   return proxy(req, params);
 }

@@ -162,7 +162,8 @@ export interface ActorIssuesResp {
 }
 
 // ---------------------------------------------------------------------------
-// Time tracking
+// Custom issues — non-Linear work items (e.g. "set up AWS") tracked manually
+// but counted in the same tallies as synced Linear issues.
 // ---------------------------------------------------------------------------
 
 export interface ActorDropdown {
@@ -172,35 +173,24 @@ export interface ActorDropdown {
   avatar_url: string | null;
 }
 
-export interface TimeEntry {
+export type CustomIssueStatus = "unstarted" | "started" | "completed" | "canceled";
+
+export interface CustomIssue {
   id: number;
-  actor_id: number;
-  actor_name: string | null;
-  actor_email: string | null;
-  started_at: string;      // ISO datetime
-  stopped_at: string | null;
-  duration_secs: number | null;
-  note: string | null;
+  identifier: string | null;
+  title: string | null;
+  assignee_id: number | null;
+  assignee_name: string | null;
+  assignee_email: string | null;
+  status: CustomIssueStatus;
+  created_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  canceled_at: string | null;
 }
 
-export interface ActiveTimerResp {
-  entry: TimeEntry | null;
-}
-
-export interface TimeLogResp {
-  entries: TimeEntry[];
+export interface CustomIssueListResp {
+  issues: CustomIssue[];
   total: number;
-}
-
-export interface TimeSummaryItem {
-  actor_id: number;
-  actor_name: string | null;
-  actor_email: string | null;
-  total_secs: number;
-  session_count: number;
-}
-
-export interface TimeSummaryResp {
-  items: TimeSummaryItem[];
 }
 
