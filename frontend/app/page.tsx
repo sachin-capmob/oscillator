@@ -5,9 +5,24 @@ import { useRange } from "@/components/shell";
 import { AreaChart, type SeriesDef } from "@/components/charts";
 import { DigestBanner } from "@/components/digest";
 import {
+  Leaderboard,
+  SprintQuestCard,
+  StatTile,
+  StreakRow,
+  fmtXp,
+} from "@/components/game";
+import {
+  buildRoster,
+  deriveSprintQuest,
+  teamXp,
+  XP_AMBER,
+  XP_BLUE,
+  XP_PURPLE,
+  XP_TEAL,
+} from "@/lib/game";
+import {
   EmptyState,
   ErrorState,
-  Kpi,
   LoadingPanel,
   Panel,
   Section,
@@ -31,6 +46,10 @@ const THR_SERIES: SeriesDef[] = [
 ];
 const WIP_SERIES: SeriesDef[] = [{ key: "WIP", name: "WIP", tone: "signal" }];
 
+function periodWordFor(range: string): string {
+  return range === "day" ? "day" : range === "month" ? "month" : "week";
+}
+
 export default function OverviewPage() {
   const { range, anchor, refreshKey } = useRange();
   const ov = useInsight<Overview>("overview", range, anchor, refreshKey);
@@ -49,8 +68,29 @@ export default function OverviewPage() {
 
   const o = ov.data;
   const loading = ov.loading;
+  const isAllTime = range === "all";
+  const periodWord = periodWordFor(range);
   const unit = thr.data?.unit ?? range;
+  const globalAvg = o?.avg_cycle_hours.current ?? null;
 
+  // --- Gamification: derive players + team XP from live data ---
+  const players = buildRoster(actors.data?.actors ?? [], globalAvg, anchor);
+  const tXp = teamXp(players);
+  // Estimate prior-period team XP from the team throughput delta so the tile can
+  // show a directional "gained this period" figure without a second fetch.
+  const thrDelta = o?.throughput.delta_pct ?? null;
+  const teamXpGain =
+    thrDelta != null && thrDelta > -100 ? Math.max(0, tXp - tXp / (1 + thrDelta / 100)) : null;
+
+  // WIP-over-average warning.
+  const wipVals = wip.data?.series.map((p) => p.value ?? 0) ?? [];
+  const avgWip = wipVals.length ? wipVals.reduce((a, b) => a + b, 0) / wipVals.length : 0;
+  const wipWarn =
+    o && avgWip > 0 && o.wip > avgWip ? `over ${Math.round(avgWip)} avg` : null;
+
+  const quest = o && !loading ? deriveSprintQuest(o, wip.data?.series, isAllTime) : null;
+
+  // --- Chart data (unchanged) ---
   const cycData =
     cyc.data?.series.map((p) => ({
       date: formatDate(p.period),
@@ -68,18 +108,13 @@ export default function OverviewPage() {
 
   const wipData = wip.data?.series.map((p) => ({ date: formatDate(p.period), WIP: p.value ?? 0 })) ?? [];
 
-  const contributors = [...(actors.data?.actors ?? [])]
-    .sort((a, b) => b.throughput - a.throughput)
-    .slice(0, 8);
-  const maxThr = Math.max(1, ...contributors.map((c) => c.throughput));
-
   return (
     <div className="flex flex-col gap-12">
       <Section
         title="Overview"
         description={
           o
-            ? range === "all"
+            ? isAllTime
               ? "All time — every issue on record, no prior-period comparison."
               : `${cap(range)} of ${formatDate(o.period_start)} — compared against the previous ${range}.`
             : "Loading the current period…"
@@ -90,30 +125,61 @@ export default function OverviewPage() {
           <DigestBanner />
         </div>
 
-        {/* KPI row — four spacious cards */}
+        {/* Sprint quest — the headline objective, above everything else */}
+        <div className="mb-6">
+          {quest ? (
+            <SprintQuestCard quest={quest} periodWord={periodWord} isAllTime={isAllTime} />
+          ) : (
+            <div className="relative h-[168px] border border-edge bg-surface">
+              <div className="loadbar" aria-hidden />
+            </div>
+          )}
+        </div>
+
+        {/* Gamified KPI tiles */}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
-          <Kpi
+          <StatTile
             label="Throughput"
             value={o?.throughput.current ?? 0}
             unit="done"
-            deltaPct={o?.throughput.delta_pct}
+            deltaPct={isAllTime ? null : o?.throughput.delta_pct}
+            periodWord={periodWord}
+            accent={XP_TEAL}
             placeholder={loading || !o}
           />
-          <Kpi
+          <StatTile
             label="Avg cycle time"
             value={o?.avg_cycle_hours.current ?? 0}
             unit="h"
             decimals={1}
-            deltaPct={o?.avg_cycle_hours.delta_pct}
+            deltaPct={isAllTime ? null : o?.avg_cycle_hours.delta_pct}
+            periodWord={periodWord}
             invertDelta
+            accent={XP_BLUE}
             placeholder={loading || !o || o.avg_cycle_hours.current == null}
           />
-          <Kpi label="Work in progress" value={o?.wip ?? 0} unit="started" placeholder={loading || !o} />
-          <Kpi label="Open issues" value={o?.open_issues ?? 0} unit="open" placeholder={loading || !o} />
+          <StatTile
+            label="Work in progress"
+            value={o?.wip ?? 0}
+            unit="started"
+            accent={XP_AMBER}
+            warn={wipWarn}
+            placeholder={loading || !o}
+          />
+          <StatTile
+            label="Team XP"
+            value={tXp}
+            unit="XP"
+            accent={XP_PURPLE}
+            footnote={
+              teamXpGain && teamXpGain >= 1 ? `+${fmtXp(teamXpGain)} this ${periodWord}` : undefined
+            }
+            placeholder={actors.loading}
+          />
         </div>
       </Section>
 
-      {/* Primary analysis — throughput (8) + top contributors (4) */}
+      {/* Leaderboard (replaces Top contributors) + throughput chart */}
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
         <div className="xl:col-span-2">
           <Panel
@@ -136,40 +202,53 @@ export default function OverviewPage() {
         <Panel
           loading={actors.loading}
           eyebrow="People"
-          title="Top contributors"
-          subtitle="By issues completed"
+          title="Leaderboard"
+          subtitle="Ranked by XP earned this period"
+          bodyClassName="p-0"
+        >
+          {actors.error ? (
+            <div className="p-6">
+              <ErrorState message={actors.error} />
+            </div>
+          ) : actors.loading ? (
+            <div className="p-6">
+              <LoadingPanel height="h-72" />
+            </div>
+          ) : players.length === 0 ? (
+            <EmptyState message="No contributors this range." />
+          ) : (
+            <Leaderboard players={players.slice(0, 8)} />
+          )}
+        </Panel>
+      </div>
+
+      {/* Activity streaks — per-person shipping this week */}
+      <Section
+        title="Activity streaks"
+        description="Daily shipping this week (Mon–Sun). Green = shipped, blue = today, empty = no activity."
+      >
+        <Panel
+          loading={actors.loading}
+          eyebrow="Momentum"
+          title="Shipping streaks"
+          subtitle={`${players.filter((p) => p.streak.streak >= 3).length} on a 3+ day streak`}
           bodyClassName="p-0"
         >
           {actors.loading ? (
             <div className="p-6">
-              <LoadingPanel height="h-72" />
+              <LoadingPanel height="h-64" />
             </div>
-          ) : contributors.length === 0 ? (
-            <EmptyState message="No contributors this range." />
+          ) : players.length === 0 ? (
+            <EmptyState message="No activity this range." />
           ) : (
             <div className="flex flex-col">
-              {contributors.map((c) => {
-                const name = c.name ?? c.email ?? `Actor ${c.actor_id}`;
-                const pct = (c.throughput / maxThr) * 100;
-                return (
-                  <div
-                    key={c.actor_id}
-                    className="relative flex items-center justify-between border-b border-edge px-6 py-3.5 last:border-b-0"
-                  >
-                    <span
-                      aria-hidden
-                      className="absolute inset-y-0 left-0 z-0"
-                      style={{ width: `${pct}%`, background: "rgba(var(--signal-rgb), 0.08)" }}
-                    />
-                    <span className="relative z-10 truncate pr-4 text-body text-ink">{name}</span>
-                    <span className="relative z-10 font-mono text-body text-ink">{c.throughput}</span>
-                  </div>
-                );
-              })}
+              {players.slice(0, 10).map((p, i) => (
+                <StreakRow key={p.actorId} player={p} index={i} />
+              ))}
             </div>
           )}
         </Panel>
-      </div>
+      </Section>
 
       {/* Secondary analysis — cycle time trend + WIP side by side */}
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">

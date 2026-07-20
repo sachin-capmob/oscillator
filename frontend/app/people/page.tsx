@@ -5,7 +5,9 @@ import { useInsight, fetchActorIssues } from "@/lib/api";
 import { useRange } from "@/components/shell";
 import { AreaChart, BarChart, type SeriesDef } from "@/components/charts";
 import { EmptyState, ErrorState, Eyebrow, LoadingPanel, Panel, Section, formatDate } from "@/components/ui";
-import type { ActorStat, ByActorResp, ThroughputByActorResp, ActorIssuesResp } from "@/lib/types";
+import { PlayerCard } from "@/components/game";
+import { buildRoster } from "@/lib/game";
+import type { ActorStat, ByActorResp, Overview, ThroughputByActorResp, ActorIssuesResp } from "@/lib/types";
 
 const PERSON_SERIES: SeriesDef[] = [
   { key: "Completed", name: "Completed", tone: "signal" },
@@ -201,9 +203,15 @@ function PersonIssuesPanel({ actors }: { actors: ActorStat[] }) {
 export default function PeoplePage() {
   const { range, anchor, refreshKey } = useRange();
   const table = useInsight<ByActorResp>("by-actor", range, anchor, refreshKey);
+  const overview = useInsight<Overview>("overview", range, anchor, refreshKey);
   const series = useInsight<ThroughputByActorResp>("throughput-by-actor", range, anchor, refreshKey);
 
   const actors = table.data?.actors ?? [];
+
+  // Gamified player profiles — XP, level, streaks, badges — from the same
+  // aggregate data the roster table uses. Global avg cycle time (from overview)
+  // drives the under-average XP bonus so numbers match the Overview leaderboard.
+  const players = buildRoster(actors, overview.data?.avg_cycle_hours.current ?? null, anchor);
 
   // Everyone's output side by side — completed vs. created, ranked by
   // throughput so the leaderboard reads top-down.
@@ -230,6 +238,36 @@ export default function PeoplePage() {
 
   return (
     <div className="flex flex-col gap-12">
+      {/* Player cards — the gamified roster: level, XP, streak, achievements */}
+      <Section
+        title="Player cards"
+        description="Every teammate as a player — level & title from XP, progress to the next level, and achievement badges (earned + locked)."
+      >
+        {table.error ? (
+          <Panel>
+            <ErrorState message={table.error} />
+          </Panel>
+        ) : table.loading ? (
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="relative h-72 border border-edge bg-surface">
+                <div className="loadbar" aria-hidden />
+              </div>
+            ))}
+          </div>
+        ) : players.length === 0 ? (
+          <Panel>
+            <EmptyState message="No players active in this range." />
+          </Panel>
+        ) : (
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+            {players.map((p, i) => (
+              <PlayerCard key={p.actorId} player={p} index={i} />
+            ))}
+          </div>
+        )}
+      </Section>
+
       <Section
         title="People"
         description="Per-person activity for the selected range. Trend = last 7 periods completed."
