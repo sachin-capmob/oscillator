@@ -22,6 +22,12 @@ const config: Config = {
       ink: "var(--ink)",
       muted: "var(--muted)",
       negative: "var(--negative)",
+      // Gamification accent palette — layered on top of the six core tokens.
+      "xp-purple": "var(--xp-purple)",
+      "xp-teal": "var(--xp-teal)",
+      "xp-amber": "var(--xp-amber)",
+      "xp-coral": "var(--xp-coral)",
+      "xp-blue": "var(--xp-blue)",
     },
     borderRadius: {
       none: "0",

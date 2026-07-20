@@ -18,7 +18,36 @@
 
   --signal-rgb: 79, 255, 176;
 
+  /* ---- Gamification accent palette (layered on top of CADENCE) ------------
+     Used by the XP / leaderboard / badge / streak / quest surfaces. The core
+     six tokens above still drive the charts and existing chrome unchanged. */
+  --xp-purple: #7f77dd;
+  --xp-teal: #1d9e75;
+  --xp-amber: #ba7517;
+  --xp-coral: #d85a30;
+  --xp-blue: #185fa5;
+
+  --xp-purple-rgb: 127, 119, 221;
+  --xp-teal-rgb: 29, 158, 117;
+  --xp-amber-rgb: 186, 117, 23;
+  --xp-coral-rgb: 216, 90, 48;
+  --xp-blue-rgb: 24, 95, 165;
+
   color-scheme: dark;
+}
+
+/* The app ships dark-first (color-scheme: dark above). Every gamification
+   surface is painted from these CSS variables — never hard-coded neutrals —
+   so a `light` theme is a pure token swap with no component changes. The opt-in
+   hook below is dormant unless `data-theme="light"` is set on <html>. */
+:root[data-theme="light"],
+.theme-light {
+  --void: #f4f6fb;
+  --surface: #ffffff;
+  --edge: #dfe4ee;
+  --ink: #10151f;
+  --muted: #6b7688;
+  color-scheme: light;
 }
 
 /* Fonts are injected as CSS variables by next/font in layout.tsx:
@@ -147,6 +176,70 @@ select:focus-visible {
 }
 .kpi-pulse {
   animation: kpi-land 0.5s ease-out forwards;
+}
+
+/* ============================================================================
+   Gamification motion. XP bars fill from 0 on mount; a soft sheen sweeps the
+   filled portion so progress reads as "earned". Respects reduced-motion.
+   ============================================================================ */
+@keyframes xp-fill {
+  from {
+    width: 0%;
+  }
+}
+@keyframes xp-sheen {
+  0% {
+    transform: translateX(-120%);
+  }
+  60%,
+  100% {
+    transform: translateX(320%);
+  }
+}
+.xp-bar-fill {
+  animation: xp-fill 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.xp-bar-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.35),
+    transparent
+  );
+  animation: xp-sheen 2.6s ease-in-out infinite;
+}
+/* Badge earned-pop on mount */
+@keyframes badge-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.badge-pop {
+  animation: badge-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xp-bar-fill,
+  .xp-bar-sheen::after,
+  .badge-pop,
+  .kpi-pulse {
+    animation: none !important;
+  }
+  .xp-bar-fill {
+    width: var(--xp-target-width, 0%);
+  }
 }
 
 /* Recharts: kill the default focus outline on the surface, keep our tooltip clean */
