@@ -230,12 +230,74 @@ select:focus-visible {
   animation: badge-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
+/* ============================================================================
+   Football (FUT) player cards. A holographic sheen sweeps gold/icon cards; the
+   card tilts toward the pointer (transform set inline by the component); icon
+   cards get a slow gold glow. All motion is disabled under reduced-motion.
+   ============================================================================ */
+@keyframes fut-shine {
+  0% {
+    transform: translateX(-140%) rotate(8deg);
+  }
+  100% {
+    transform: translateX(240%) rotate(8deg);
+  }
+}
+.fut-shine::before {
+  content: "";
+  position: absolute;
+  top: -20%;
+  left: 0;
+  height: 140%;
+  width: 45%;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.45) 50%,
+    transparent 80%
+  );
+  pointer-events: none;
+  animation: fut-shine 3.4s ease-in-out infinite;
+  mix-blend-mode: soft-light;
+}
+.fut-card {
+  transform-style: preserve-3d;
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease;
+}
+@keyframes fut-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+}
+.fut-in {
+  animation: fut-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes fut-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgba(246, 223, 148, 0.35), 0 8px 30px rgba(246, 223, 148, 0.12);
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(246, 223, 148, 0.7), 0 10px 44px rgba(246, 223, 148, 0.28);
+  }
+}
+.fut-glow {
+  animation: fut-glow 3.2s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .xp-bar-fill,
   .xp-bar-sheen::after,
   .badge-pop,
-  .kpi-pulse {
+  .kpi-pulse,
+  .fut-shine::before,
+  .fut-in,
+  .fut-glow {
     animation: none !important;
+  }
+  .fut-card {
+    transition: none !important;
   }
   .xp-bar-fill {
     width: var(--xp-target-width, 0%);
