@@ -36,6 +36,7 @@ const NAV = [
   { href: "/", label: "Overview" },
   { href: "/trends", label: "Trends" },
   { href: "/people", label: "People" },
+  { href: "/squad", label: "Squad" },
   { href: "/teams", label: "Cycles" },
   { href: "/issues", label: "Issues" },
 ];
