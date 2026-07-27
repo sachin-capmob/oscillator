@@ -25,6 +25,18 @@ class Settings(BaseSettings):
     database_url: str = Field(default="")
     dashboard_auth_token: str = Field(default="")
 
+    # Zoho Sprints OAuth (Self Client — https://api-console.zoho.com/).
+    # Region-specific hosts: accounts.zoho.com/.eu/.in/.com.au/.jp — match
+    # both zoho_accounts_url and zoho_api_url to the same data center.
+    zoho_client_id: str = Field(default="")
+    zoho_client_secret: str = Field(default="")
+    zoho_refresh_token: str = Field(default="")
+    zoho_accounts_url: str = Field(default="https://accounts.zoho.com")
+    zoho_api_url: str = Field(default="https://sprintsapi.zoho.com")
+    zoho_team_id: str = Field(default="")
+    # Safety margin under Zoho's documented ~30 calls/min.
+    zoho_rate_limit_per_min: int = Field(default=28)
+
     # Groq (OpenAI-compatible) powers the narrative digest. When unset the
     # digest degrades gracefully to a deterministic templated summary.
     groq_api_key: str = Field(default="")
@@ -70,6 +82,10 @@ class Settings(BaseSettings):
     @property
     def groq_configured(self) -> bool:
         return bool(self.groq_api_key)
+
+    @property
+    def zoho_configured(self) -> bool:
+        return bool(self.zoho_client_id and self.zoho_refresh_token and self.zoho_team_id)
 
 
 @lru_cache

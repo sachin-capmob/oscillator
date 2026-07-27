@@ -194,3 +194,69 @@ export interface CustomIssueListResp {
   total: number;
 }
 
+// ---------------------------------------------------------------------------
+// Engineering Points — the Zoho Sprints label-driven scoring ledger.
+// Mirrors backend/app/schemas/points.py.
+// ---------------------------------------------------------------------------
+
+export interface PointsCategoryBreakdown {
+  category: string;
+  points: number;
+}
+
+export interface PointsActorStat {
+  actor_id: number;
+  name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+  total_points: number;
+  by_category: PointsCategoryBreakdown[];
+}
+
+export interface PointsByActorResp {
+  range: Range;
+  period_start: string;
+  period_end: string;
+  actors: PointsActorStat[];
+}
+
+export interface PointsLedgerEntry {
+  id: number;
+  issue_id: number;
+  identifier: string | null;
+  title: string | null;
+  actor_id: number | null;
+  name: string | null;
+  category: string;
+  event_kind: "award" | "reversal" | "bonus";
+  points: number;
+  rule_key: string | null;
+  label_state: string[] | Record<string, unknown> | null;
+  effective_at: string;
+  awarded_at: string;
+  reverses_event_id: number | null;
+  related_event_id: number | null;
+}
+
+export interface PointsLedgerResp {
+  entries: PointsLedgerEntry[];
+  total: number;
+}
+
+export interface UnscoredTicketItem {
+  issue_id: number;
+  identifier: string | null;
+  title: string | null;
+  assignee_id: number | null;
+  assignee_name: string | null;
+  reason: string;
+  first_detected_at: string;
+  last_checked_at: string;
+  notified_at: string | null;
+}
+
+export interface UnscoredResp {
+  range: Range;
+  tickets: UnscoredTicketItem[];
+}
+

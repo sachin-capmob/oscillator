@@ -69,12 +69,15 @@ async def ready() -> dict[str, object]:
         "status": "ready",
         "database_configured": settings.database_configured,
         "linear_configured": bool(settings.linear_api_key),
+        "zoho_configured": settings.zoho_configured,
         "environment": settings.environment,
     }
 
 
 from app.api import custom_issues  # noqa: E402
 from app.api import insights  # noqa: E402
+from app.api import points  # noqa: E402
 
 app.include_router(insights.router)
 app.include_router(custom_issues.router)
+app.include_router(points.router)

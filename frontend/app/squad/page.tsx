@@ -4,34 +4,41 @@ import { useInsight } from "@/lib/api";
 import { useRange } from "@/components/shell";
 import { EmptyState, ErrorState, Eyebrow, Panel, Section } from "@/components/ui";
 import { FutCard, SquadPitch } from "@/components/fut";
-import { buildRoster } from "@/lib/game";
+import { buildPointsMap, buildRoster } from "@/lib/game";
 import { buildSquad, STAT_META } from "@/lib/fut";
-import type { ByActorResp, Overview } from "@/lib/types";
+import type { ByActorResp, Overview, PointsByActorResp } from "@/lib/types";
 
 export default function SquadPage() {
   const { range, anchor, refreshKey } = useRange();
   const table = useInsight<ByActorResp>("by-actor", range, anchor, refreshKey);
   const overview = useInsight<Overview>("overview", range, anchor, refreshKey);
+  const points = useInsight<PointsByActorResp>("points/by-actor", range, anchor, refreshKey);
 
+  // Football ratings (PAC/SHO/PAS/DRI/DEF/PHY) derive from throughput/cycle
+  // time/streak, not XP — but Player.xp still needs to be real Engineering
+  // Points for consistency with the Overview/People pages.
+  const pointsMap = buildPointsMap(points.data?.actors);
   const players = buildRoster(
     table.data?.actors ?? [],
     overview.data?.avg_cycle_hours.current ?? null,
     anchor,
+    pointsMap,
   );
   const squad = buildSquad(players);
   const captain = squad[0];
+  const squadLoading = table.loading || points.loading;
 
   return (
     <div className="flex flex-col gap-12">
       <Section
         title="Squad"
-        description="Every teammate as a football player card — rated out of 99 from live Linear stats, in the FIFA Ultimate Team tradition. Bronze → silver → gold → icon."
+        description="Every teammate as a football player card — rated out of 99 from live team activity, in the FIFA Ultimate Team tradition. Bronze → silver → gold → icon."
       >
         {table.error ? (
           <Panel>
             <ErrorState message={table.error} />
           </Panel>
-        ) : table.loading ? (
+        ) : squadLoading ? (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
             {[0, 1, 2, 3].map((i) => (
               <div key={i} className="relative h-80 border border-edge bg-surface">

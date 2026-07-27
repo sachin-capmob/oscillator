@@ -1,0 +1,58 @@
+name: Zoho Sprints Sync
+
+# Cron polling architecture, mirroring sync.yml (Linear) — no always-on
+# server, no webhooks. Runs on its own schedule/concurrency group so it never
+# blocks on (or is blocked by) the Linear sync during the migration window.
+on:
+  schedule:
+    # Every hour, 5 minutes past — offset from Linear's :00 so the two jobs
+    # don't contend for GitHub Actions runners at the same instant.
+    - cron: "5 * * * *"
+  workflow_dispatch: {}
+
+# Never let two Zoho syncs overlap (they share the sync_state watermark).
+concurrency:
+  group: zoho-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    # Longer than Linear's 20min: Zoho's ~30 calls/min limit is tighter, and
+    # every request goes through the client's own rate limiter.
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Apply database migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DB_SSL: "true"
+        run: alembic upgrade head
+
+      - name: Run Zoho Sprints sync
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ZOHO_CLIENT_ID: ${{ secrets.ZOHO_CLIENT_ID }}
+          ZOHO_CLIENT_SECRET: ${{ secrets.ZOHO_CLIENT_SECRET }}
+          ZOHO_REFRESH_TOKEN: ${{ secrets.ZOHO_REFRESH_TOKEN }}
+          ZOHO_TEAM_ID: ${{ secrets.ZOHO_TEAM_ID }}
+          ZOHO_ACCOUNTS_URL: ${{ secrets.ZOHO_ACCOUNTS_URL }}
+          ZOHO_API_URL: ${{ secrets.ZOHO_API_URL }}
+          DB_SSL: "true"
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        # A non-zero exit (any phase failed) fails the job loudly; the
+        # watermark is NOT advanced, so the next run safely re-syncs.
+        run: python -m app.jobs.sync_zoho

@@ -12,6 +12,7 @@ import {
   fmtXp,
 } from "@/components/game";
 import {
+  buildPointsMap,
   buildRoster,
   deriveSprintQuest,
   teamXp,
@@ -34,6 +35,7 @@ import type {
   ThroughputResp,
   WipResp,
   ByActorResp,
+  PointsByActorResp,
 } from "@/lib/types";
 
 const CYCLE_SERIES: SeriesDef[] = [
@@ -57,6 +59,7 @@ export default function OverviewPage() {
   const thr = useInsight<ThroughputResp>("throughput", range, anchor, refreshKey);
   const wip = useInsight<WipResp>("wip", range, anchor, refreshKey);
   const actors = useInsight<ByActorResp>("by-actor", range, anchor, refreshKey);
+  const points = useInsight<PointsByActorResp>("points/by-actor", range, anchor, refreshKey);
 
   if (ov.error) {
     return (
@@ -74,7 +77,9 @@ export default function OverviewPage() {
   const globalAvg = o?.avg_cycle_hours.current ?? null;
 
   // --- Gamification: derive players + team XP from live data ---
-  const players = buildRoster(actors.data?.actors ?? [], globalAvg, anchor);
+  const pointsMap = buildPointsMap(points.data?.actors);
+  const players = buildRoster(actors.data?.actors ?? [], globalAvg, anchor, pointsMap);
+  const rosterLoading = actors.loading || points.loading;
   const tXp = teamXp(players);
   // Estimate prior-period team XP from the team throughput delta so the tile can
   // show a directional "gained this period" figure without a second fetch.
@@ -174,7 +179,7 @@ export default function OverviewPage() {
             footnote={
               teamXpGain && teamXpGain >= 1 ? `+${fmtXp(teamXpGain)} this ${periodWord}` : undefined
             }
-            placeholder={actors.loading}
+            placeholder={rosterLoading}
           />
         </div>
       </Section>
@@ -200,7 +205,7 @@ export default function OverviewPage() {
         </div>
 
         <Panel
-          loading={actors.loading}
+          loading={rosterLoading}
           eyebrow="People"
           title="Leaderboard"
           subtitle="Ranked by XP earned this period"
@@ -210,7 +215,7 @@ export default function OverviewPage() {
             <div className="p-6">
               <ErrorState message={actors.error} />
             </div>
-          ) : actors.loading ? (
+          ) : rosterLoading ? (
             <div className="p-6">
               <LoadingPanel height="h-72" />
             </div>
@@ -228,13 +233,13 @@ export default function OverviewPage() {
         description="Daily shipping this week (Mon–Sun). Green = shipped, blue = today, empty = no activity."
       >
         <Panel
-          loading={actors.loading}
+          loading={rosterLoading}
           eyebrow="Momentum"
           title="Shipping streaks"
           subtitle={`${players.filter((p) => p.streak.streak >= 3).length} on a 3+ day streak`}
           bodyClassName="p-0"
         >
-          {actors.loading ? (
+          {rosterLoading ? (
             <div className="p-6">
               <LoadingPanel height="h-64" />
             </div>
