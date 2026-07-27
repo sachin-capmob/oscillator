@@ -17,7 +17,7 @@ import logging
 from collections.abc import Iterable
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,20 +29,58 @@ from app.linear.client import (
     LinearTeam,
     LinearUser,
 )
-from app.models import Actor, Comment, Cycle, Issue, IssueHistory, RawEvent, Team
+from app.models import (
+    Actor,
+    Comment,
+    Cycle,
+    Epic,
+    Issue,
+    IssueHistory,
+    IssueTag,
+    IssueTagHistory,
+    Project,
+    RawEvent,
+    StatusDef,
+    Tag,
+    Team,
+)
+from app.zoho.client import (
+    ZohoComment,
+    ZohoEpic,
+    ZohoItem,
+    ZohoProject,
+    ZohoSprint,
+    ZohoTag,
+    ZohoTeam,
+    ZohoUser,
+)
+from app.zoho.mapping import classify_status_name
 
 logger = logging.getLogger("app.normalizer")
 
 
-async def _land_raw(session: AsyncSession, event_type: str, dtos: Iterable) -> None:
-    rows = [{"event_type": event_type, "action": "sync", "payload": d.raw} for d in dtos]
+async def _land_raw(
+    session: AsyncSession, event_type: str, dtos: Iterable, *, source: str = "linear"
+) -> None:
+    rows = [
+        {"event_type": event_type, "action": "sync", "payload": d.raw, "source": source}
+        for d in dtos
+    ]
     if rows:
         await session.execute(pg_insert(RawEvent), rows)
 
 
-async def _id_map(session: AsyncSession, model) -> dict[str, int]:
-    res = await session.execute(select(model.linear_id, model.id))
-    return {linear_id: surrogate for linear_id, surrogate in res.all()}
+async def _id_map(session: AsyncSession, model, id_col: str = "linear_id") -> dict[str, int]:
+    """Surrogate-id lookup keyed on either source's natural id.
+
+    `id_col` is "linear_id" (default, every existing call site) or
+    "zoho_id" — since a row carries at most one of the two (see the
+    nullable-linear_id migration 0008), filtering NOT NULL on the chosen
+    column keeps the two source's maps disjoint with no risk of collision.
+    """
+    col = getattr(model, id_col)
+    res = await session.execute(select(col, model.id).where(col.is_not(None)))
+    return {key: surrogate for key, surrogate in res.all()}
 
 
 async def upsert_teams(session: AsyncSession, teams: list[LinearTeam]) -> int:
@@ -282,6 +320,492 @@ async def upsert_comments(session: AsyncSession, comments: list[LinearComment]) 
     stmt = pg_insert(Comment).values(rows)
     stmt = stmt.on_conflict_do_update(
         index_elements=[Comment.linear_id],
+        set_={
+            "issue_id": stmt.excluded.issue_id,
+            "actor_id": stmt.excluded.actor_id,
+            "body": stmt.excluded.body,
+            "created_at": stmt.excluded.created_at,
+            "row_updated_at": func.now(),
+        },
+    )
+    await session.execute(stmt)
+    return len(rows)
+
+
+# =============================================================================
+# Zoho Sprints — separate upsert functions (own DTOs, own natural key column
+# `zoho_id`) writing into the SAME tables Linear normalizes into, so every
+# existing insights query/matview works over both sources with no changes.
+# Kept structurally distinct from the Linear functions above rather than
+# genericized, since the two DTO shapes differ enough that a shared function
+# would need per-source branches anyway — this way the Linear path stays
+# byte-for-byte unchanged.
+# =============================================================================
+
+_ZOHO_SOURCE = "zoho_sprints"
+
+
+async def upsert_zoho_teams(session: AsyncSession, teams: list[ZohoTeam]) -> int:
+    if not teams:
+        return 0
+    await _land_raw(session, "ZohoTeam", teams, source=_ZOHO_SOURCE)
+    rows = [{"zoho_id": t.id, "name": t.name} for t in teams]
+    stmt = pg_insert(Team).values(rows)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[Team.zoho_id],
+        set_={"name": stmt.excluded.name, "row_updated_at": func.now()},
+    )
+    await session.execute(stmt)
+    return len(rows)
+
+
+async def upsert_zoho_actors(session: AsyncSession, users: list[ZohoUser]) -> int:
+    if not users:
+        return 0
+    await _land_raw(session, "ZohoUser", users, source=_ZOHO_SOURCE)
+    rows = [
+        {
+            "zoho_id": u.id,
+            "name": u.name,
+            "email": u.email,
+            "avatar_url": u.avatar_url,
+            "active": u.active,
+        }
+        for u in users
+    ]
+    stmt = pg_insert(Actor).values(rows)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[Actor.zoho_id],
+        set_={
+            "name": stmt.excluded.name,
+            "email": stmt.excluded.email,
+            "avatar_url": stmt.excluded.avatar_url,
+            "active": stmt.excluded.active,
+            "row_updated_at": func.now(),
+        },
+    )
+    await session.execute(stmt)
+    return len(rows)
+
+
+async def upsert_projects(session: AsyncSession, projects: list[ZohoProject]) -> int:
+    if not projects:
+        return 0
+    await _land_raw(session, "ZohoProject", projects, source=_ZOHO_SOURCE)
+    team_map = await _id_map(session, Team, "zoho_id")
+    rows = [
+        {
+            "zoho_id": p.id,
+            "team_id": team_map.get(p.team_id),
+            "key": p.key,
+            "name": p.name,
+            "archived_at": p.archived_at,
+        }
+        for p in projects
+    ]
+    stmt = pg_insert(Project).values(rows)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[Project.zoho_id],
+        set_={
+            "team_id": stmt.excluded.team_id,
+            "key": stmt.excluded.key,
+            "name": stmt.excluded.name,
+            "archived_at": stmt.excluded.archived_at,
+            "row_updated_at": func.now(),
+        },
+    )
+    await session.execute(stmt)
+    return len(rows)
+
+
+async def upsert_epics(session: AsyncSession, epics: list[ZohoEpic]) -> int:
+    if not epics:
+        return 0
+    await _land_raw(session, "ZohoEpic", epics, source=_ZOHO_SOURCE)
+    project_map = await _id_map(session, Project, "zoho_id")
+    rows = [
+        {"zoho_id": e.id, "project_id": project_map.get(e.project_id), "name": e.name}
+        for e in epics
+    ]
+    stmt = pg_insert(Epic).values(rows)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[Epic.zoho_id],
+        set_={
+            "project_id": stmt.excluded.project_id,
+            "name": stmt.excluded.name,
+            "row_updated_at": func.now(),
+        },
+    )
+    await session.execute(stmt)
+    return len(rows)
+
+
+async def upsert_zoho_sprints(session: AsyncSession, sprints: list[ZohoSprint]) -> int:
+    """Zoho sprints land in the same `cycles` table Linear cycles use.
+
+    A sprint only carries `project_id`; `cycles.team_id` is resolved via the
+    project's team so the existing team-scoped rollups keep working unchanged.
+    """
+    if not sprints:
+        return 0
+    await _land_raw(session, "ZohoSprint", sprints, source=_ZOHO_SOURCE)
+    project_map = await _id_map(session, Project, "zoho_id")
+    proj_team = dict((await session.execute(select(Project.id, Project.team_id))).all())
+    rows = []
+    for s in sprints:
+        proj_surrogate = project_map.get(s.project_id)
+        rows.append(
+            {
+                "zoho_id": s.id,
+                "team_id": proj_team.get(proj_surrogate) if proj_surrogate else None,
+                "number": s.number,
+                "name": s.name,
+                "starts_at": s.starts_at,
+                "ends_at": s.ends_at,
+                "completed_at": s.completed_at,
+            }
+        )
+    stmt = pg_insert(Cycle).values(rows)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[Cycle.zoho_id],
+        set_={
+            "team_id": stmt.excluded.team_id,
+            "number": stmt.excluded.number,
+            "name": stmt.excluded.name,
+            "starts_at": stmt.excluded.starts_at,
+            "ends_at": stmt.excluded.ends_at,
+            "completed_at": stmt.excluded.completed_at,
+            "row_updated_at": func.now(),
+        },
+    )
+    await session.execute(stmt)
+    return len(rows)
+
+
+async def upsert_tags(session: AsyncSession, tags: list[ZohoTag]) -> int:
+    if not tags:
+        return 0
+    await _land_raw(session, "ZohoTag", tags, source=_ZOHO_SOURCE)
+    team_map = await _id_map(session, Team, "zoho_id")
+    actor_map = await _id_map(session, Actor, "zoho_id")
+    rows = [
+        {
+            "zoho_id": t.id,
+            "team_id": team_map.get(t.team_id),
+            "name": t.name,
+            "color_code": t.color_code,
+            "created_by_id": actor_map.get(t.created_by),
+        }
+        for t in tags
+    ]
+    stmt = pg_insert(Tag).values(rows)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[Tag.zoho_id],
+        set_={
+            "team_id": stmt.excluded.team_id,
+            "name": stmt.excluded.name,
+            "color_code": stmt.excluded.color_code,
+            "created_by_id": stmt.excluded.created_by_id,
+            "row_updated_at": func.now(),
+        },
+    )
+    await session.execute(stmt)
+    return len(rows)
+
+
+async def upsert_items(session: AsyncSession, items: list[ZohoItem]) -> tuple[int, int]:
+    """Upsert Zoho Sprints items into `issues` and record state transitions.
+
+    Exactly the same snapshot-before-overwrite-then-diff shape as
+    upsert_issues (Linear): land raw, resolve FK maps, diff (state,
+    state_type) against what's stored, upsert, write transitions. The one
+    extra step is resolving each item's status through `status_defs`,
+    seeding a best-effort mapping (app.zoho.mapping.classify_status_name) the
+    first time a (project, status) pair is seen — ON CONFLICT DO NOTHING, so
+    a hand-corrected mapping is never clobbered by the heuristic on a later
+    sync. Returns (upserted, transitions).
+    """
+    if not items:
+        return 0, 0
+    await _land_raw(session, "ZohoItem", items, source=_ZOHO_SOURCE)
+
+    project_map = await _id_map(session, Project, "zoho_id")
+    actor_map = await _id_map(session, Actor, "zoho_id")
+    cycle_map = await _id_map(session, Cycle, "zoho_id")
+    epic_map = await _id_map(session, Epic, "zoho_id")
+    proj_team = dict((await session.execute(select(Project.id, Project.team_id))).all())
+
+    # Seed status_defs for every (project, status) pair seen. DO NOTHING
+    # preserves any existing (possibly hand-corrected) mapping.
+    status_rows = []
+    seen_status: set[tuple[int, str]] = set()
+    for it in items:
+        proj_surrogate = project_map.get(it.project_id)
+        if proj_surrogate is None or it.status_id is None:
+            continue
+        key = (proj_surrogate, it.status_id)
+        if key in seen_status:
+            continue
+        seen_status.add(key)
+        status_rows.append(
+            {
+                "project_id": proj_surrogate,
+                "zoho_status_id": it.status_id,
+                "name": it.status_name,
+                "state_type": classify_status_name(it.status_name),
+            }
+        )
+    if status_rows:
+        stmt = pg_insert(StatusDef).values(status_rows)
+        stmt = stmt.on_conflict_do_nothing(
+            index_elements=[StatusDef.project_id, StatusDef.zoho_status_id]
+        )
+        await session.execute(stmt)
+
+    status_map: dict[tuple[int, str], str] = {}
+    if seen_status:
+        proj_ids = {pid for pid, _ in seen_status}
+        res = await session.execute(
+            select(StatusDef.project_id, StatusDef.zoho_status_id, StatusDef.state_type).where(
+                StatusDef.project_id.in_(proj_ids)
+            )
+        )
+        status_map = {(pid, sid): st for pid, sid, st in res.all()}
+
+    # Snapshot stored state BEFORE upserting so we can diff transitions.
+    res = await session.execute(
+        select(Issue.zoho_id, Issue.state, Issue.state_type).where(Issue.zoho_id.is_not(None))
+    )
+    stored = {zid: (st, stt) for zid, st, stt in res.all()}
+
+    transitions: list[dict] = []
+    rows = []
+    for it in items:
+        proj_surrogate = project_map.get(it.project_id)
+        state_type = (
+            status_map.get((proj_surrogate, it.status_id))
+            if proj_surrogate and it.status_id
+            else None
+        )
+        state_name = it.status_name
+
+        changed_at = it.updated_at or it.created_at or datetime.now(UTC)
+        prev = stored.get(it.id)
+        if prev is None:
+            transitions.append(
+                {
+                    "issue_zoho_id": it.id,
+                    "changed_at": changed_at,
+                    "from_state": None,
+                    "from_state_type": None,
+                    "to_state": state_name,
+                    "to_state_type": state_type,
+                }
+            )
+        elif prev[0] != state_name or prev[1] != state_type:
+            transitions.append(
+                {
+                    "issue_zoho_id": it.id,
+                    "changed_at": changed_at,
+                    "from_state": prev[0],
+                    "from_state_type": prev[1],
+                    "to_state": state_name,
+                    "to_state_type": state_type,
+                }
+            )
+
+        # No confirmed field distinguishes "cancelled" from "completed" on
+        # the item payload itself (see app/zoho/client.py) — the terminal
+        # timestamp is resolved from the status_defs-derived state_type
+        # instead, using whichever completion-ish timestamp Zoho gave us.
+        terminal_at = it.completed_at or it.updated_at
+        completed_at = terminal_at if state_type == "completed" else None
+        canceled_at = terminal_at if state_type == "canceled" else None
+
+        rows.append(
+            {
+                "zoho_id": it.id,
+                "identifier": it.identifier,
+                "title": it.title,
+                "team_id": proj_team.get(proj_surrogate) if proj_surrogate else None,
+                "assignee_id": actor_map.get(it.owner_id),
+                "creator_id": actor_map.get(it.created_by),
+                "completed_by_id": actor_map.get(it.completed_by),
+                "cycle_id": cycle_map.get(it.sprint_id),
+                "epic_id": epic_map.get(it.epic_id),
+                "zoho_project_id": proj_surrogate,
+                "state": state_name,
+                "state_type": state_type,
+                "priority_label": it.priority_label,
+                "estimate": it.points,
+                "source": _ZOHO_SOURCE,
+                "created_at": it.created_at,
+                "started_at": it.started_at,
+                "completed_at": completed_at,
+                "canceled_at": canceled_at,
+                "updated_at": it.updated_at,
+            }
+        )
+
+    stmt = pg_insert(Issue).values(rows)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[Issue.zoho_id],
+        set_={
+            c: getattr(stmt.excluded, c)
+            for c in (
+                "identifier", "title", "team_id", "assignee_id", "creator_id",
+                "completed_by_id", "cycle_id", "epic_id", "zoho_project_id",
+                "state", "state_type", "priority_label", "estimate", "source",
+                "created_at", "started_at", "completed_at", "canceled_at", "updated_at",
+            )
+        }
+        | {"row_updated_at": func.now()},
+    )
+    await session.execute(stmt)
+
+    n_transitions = await _write_zoho_transitions(session, transitions)
+    return len(rows), n_transitions
+
+
+async def _write_zoho_transitions(session: AsyncSession, transitions: list[dict]) -> int:
+    if not transitions:
+        return 0
+    issue_map = await _id_map(session, Issue, "zoho_id")
+
+    conn = await session.connection()
+    months = {(t["changed_at"].year, t["changed_at"].month) for t in transitions}
+    for year, month in sorted(months):
+        await ensure_month_partition(conn, "issue_history", datetime(year, month, 1, tzinfo=UTC))
+
+    rows = []
+    for t in transitions:
+        issue_id = issue_map.get(t["issue_zoho_id"])
+        if issue_id is None:
+            continue
+        rows.append(
+            {
+                "issue_id": issue_id,
+                "changed_at": t["changed_at"],
+                "linear_id": None,  # Zoho-sourced; no Linear history node id
+                "actor_id": None,  # actor unknown without an activity-log API
+                "from_state": t["from_state"],
+                "from_state_type": t["from_state_type"],
+                "to_state": t["to_state"],
+                "to_state_type": t["to_state_type"],
+            }
+        )
+    if rows:
+        await session.execute(pg_insert(IssueHistory), rows)
+    return len(rows)
+
+
+async def upsert_item_tags(session: AsyncSession, items: list[ZohoItem]) -> tuple[int, int]:
+    """Diff each item's incoming tag set against `issue_tags`, upsert the
+    current-state table, and append add/remove rows to `issue_tag_history`.
+
+    Same snapshot-before-overwrite-then-diff idiom as upsert_issues, applied
+    to tag SETS instead of a single (state, state_type) pair. `changed_at` is
+    this poll's timestamp, not the tag's true edit instant — no reliable
+    tag-history API exists (same limitation issue_history already accepts
+    for state transitions). Returns (issue_tags rows touched, history rows written).
+    """
+    if not items:
+        return 0, 0
+    issue_map = await _id_map(session, Issue, "zoho_id")
+    tag_map = await _id_map(session, Tag, "zoho_id")
+
+    incoming: dict[int, set[int]] = {}
+    for it in items:
+        issue_id = issue_map.get(it.id)
+        if issue_id is None:
+            continue
+        incoming[issue_id] = {tag_map[tid] for tid in it.tag_ids if tid in tag_map}
+
+    if not incoming:
+        return 0, 0
+
+    res = await session.execute(
+        select(IssueTag.issue_id, IssueTag.tag_id).where(
+            IssueTag.issue_id.in_(incoming.keys()), IssueTag.removed_at.is_(None)
+        )
+    )
+    current: dict[int, set[int]] = {}
+    for issue_id, tag_id in res.all():
+        current.setdefault(issue_id, set()).add(tag_id)
+
+    now = datetime.now(UTC)
+    added_pairs: list[tuple[int, int]] = []
+    removed_pairs: list[tuple[int, int]] = []
+    for issue_id, want in incoming.items():
+        have = current.get(issue_id, set())
+        added_pairs.extend((issue_id, tag_id) for tag_id in want - have)
+        removed_pairs.extend((issue_id, tag_id) for tag_id in have - want)
+
+    if added_pairs:
+        stmt = pg_insert(IssueTag).values(
+            [
+                {"issue_id": i, "tag_id": t, "added_at": now, "removed_at": None}
+                for i, t in added_pairs
+            ]
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[IssueTag.issue_id, IssueTag.tag_id],
+            set_={"added_at": now, "removed_at": None},
+        )
+        await session.execute(stmt)
+
+    if removed_pairs:
+        await session.execute(
+            IssueTag.__table__.update()
+            .where(tuple_(IssueTag.issue_id, IssueTag.tag_id).in_(removed_pairs))
+            .values(removed_at=now)
+        )
+
+    history_rows = [
+        {"issue_id": i, "tag_id": t, "action": "added", "changed_at": now}
+        for i, t in added_pairs
+    ] + [
+        {"issue_id": i, "tag_id": t, "action": "removed", "changed_at": now}
+        for i, t in removed_pairs
+    ]
+    if history_rows:
+        conn = await session.connection()
+        await ensure_month_partition(conn, "issue_tag_history", now)
+        await session.execute(pg_insert(IssueTagHistory), history_rows)
+
+    return len(added_pairs) + len(removed_pairs), len(history_rows)
+
+
+async def upsert_item_comments(session: AsyncSession, comments: list[ZohoComment]) -> int:
+    if not comments:
+        return 0
+    await _land_raw(session, "ZohoComment", comments, source=_ZOHO_SOURCE)
+    issue_map = await _id_map(session, Issue, "zoho_id")
+    actor_map = await _id_map(session, Actor, "zoho_id")
+
+    rows = []
+    skipped = 0
+    for c in comments:
+        issue_id = issue_map.get(c.item_id)
+        if issue_id is None:
+            skipped += 1
+            continue
+        rows.append(
+            {
+                "zoho_id": c.id,
+                "issue_id": issue_id,
+                "actor_id": actor_map.get(c.user_id),
+                "body": c.body,
+                "created_at": c.created_at,
+            }
+        )
+    if skipped:
+        logger.warning("Skipped %d Zoho comments referencing unknown items", skipped)
+    if not rows:
+        return 0
+    stmt = pg_insert(Comment).values(rows)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[Comment.zoho_id],
         set_={
             "issue_id": stmt.excluded.issue_id,
             "actor_id": stmt.excluded.actor_id,

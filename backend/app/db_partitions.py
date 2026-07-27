@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 PARTITIONED_TABLES: dict[str, str] = {
     "raw_events": "received_at",
     "issue_history": "changed_at",
+    "issue_tag_history": "changed_at",
 }
 
 
