@@ -1,14 +1,15 @@
 // ============================================================================
-// Gamification engine — stateless. Everything here is derived from the same
-// Linear-backed insights the rest of the dashboard already fetches (by-actor,
-// overview, wip, throughput). Nothing is persisted: XP, levels, streaks and
-// badges are recomputed on every load from the live data.
-//
-// XP formula (per person):
-//   (issues_closed × 130)
-//   + (issues_closed_under_avg_cycle_time × 50)
-//   + (streak_days × 20)
-// Team XP = Σ per-person XP.
+// Gamification engine. Streaks and badges are stateless, derived on every
+// load from the same by-actor/overview/wip/throughput insights the rest of
+// the dashboard fetches. XP is NOT computed here — it comes from the backend
+// Engineering Points ledger (GET /api/insights/points/by-actor), a nightly-
+// scored, auditable ledger over Linear issue labels (see
+// backend/app/jobs/score_points.py). buildPlayer/buildRoster take a
+// per-actor points map and use it as `xp` directly; the old
+// issues×130-based formula below (computeXp/estimateUnderAvg) is kept but
+// unused by default — it's dead code once every call site passes a real
+// points map, left in place only in case something still needs it during
+// the transition.
 // ============================================================================
 
 import type { ActorStat, Overview, TimePoint } from "./types";
@@ -30,10 +31,17 @@ export function xpColor(index: number): string {
 }
 
 // ---- XP constants ----------------------------------------------------------
+// XP_PER_CLOSE/XP_UNDER_AVG_BONUS/XP_PER_STREAK_DAY only feed the deprecated
+// computeXp() formula below — real XP is Engineering Points from the
+// backend. XP_PER_LEVEL is still very much live: it sets how many points
+// span one level for both sources. Retuned from 200 -> 40: Engineering
+// Points top out around 15/ticket (vs. the old formula's 130/close), so a
+// solid week (a few closes, a review, maybe an incident) should still move
+// the level bar instead of barely denting it.
 export const XP_PER_CLOSE = 130;
 export const XP_UNDER_AVG_BONUS = 50;
 export const XP_PER_STREAK_DAY = 20;
-export const XP_PER_LEVEL = 200;
+export const XP_PER_LEVEL = 40;
 
 // ---- Names / initials ------------------------------------------------------
 function personName(a: { name: string | null; email: string | null; actor_id: number }): string {
@@ -166,6 +174,11 @@ export function estimateUnderAvg(
 }
 
 // ---- Core XP + levels ------------------------------------------------------
+/**
+ * @deprecated superseded by real Engineering Points from the backend
+ * (GET /api/insights/points/by-actor). Kept only so nothing breaks if a
+ * caller is ever missing a points map; no call site uses this anymore.
+ */
 export function computeXp(throughput: number, underAvgCount: number, streakDays: number): number {
   return (
     throughput * XP_PER_CLOSE +
@@ -305,12 +318,23 @@ export interface Player {
   badges: BadgeState[];
 }
 
-/** Build the full gamified profile for one actor from aggregate insights data. */
-export function buildPlayer(actor: ActorStat, globalAvg: number | null, anchor: string): Player {
+/**
+ * Build the full gamified profile for one actor from aggregate insights
+ * data. `points` is the actor's real Engineering Points total for the
+ * period (from GET /api/insights/points/by-actor) — pass a `Map` built from
+ * that response's `actors[].total_points`; an actor missing from the map
+ * (no scored tickets this period) gets `xp = 0`.
+ */
+export function buildPlayer(
+  actor: ActorStat,
+  globalAvg: number | null,
+  anchor: string,
+  points: Map<number, number>,
+): Player {
   const created = actor.created ?? 0;
   const streak = computeStreak(actor.sparkline ?? [], anchor);
   const underAvgCount = estimateUnderAvg(actor.throughput, actor.avg_cycle_hours, globalAvg);
-  const xp = computeXp(actor.throughput, underAvgCount, streak.streak);
+  const xp = points.get(actor.actor_id) ?? 0;
   const badges = evaluateBadges({
     throughput: actor.throughput,
     created,
@@ -333,11 +357,21 @@ export function buildPlayer(actor: ActorStat, globalAvg: number | null, anchor: 
   };
 }
 
-/** Build + XP-rank every active actor. */
-export function buildRoster(actors: ActorStat[], globalAvg: number | null, anchor: string): Player[] {
+/** Build + XP-rank every active actor. See buildPlayer for what `points` is. */
+export function buildRoster(
+  actors: ActorStat[],
+  globalAvg: number | null,
+  anchor: string,
+  points: Map<number, number>,
+): Player[] {
   return actors
-    .map((a) => buildPlayer(a, globalAvg, anchor))
+    .map((a) => buildPlayer(a, globalAvg, anchor, points))
     .sort((a, b) => b.xp - a.xp || b.throughput - a.throughput);
+}
+
+/** Build an actor_id -> total_points lookup from the points/by-actor response. */
+export function buildPointsMap(actors: { actor_id: number; total_points: number }[] | undefined): Map<number, number> {
+  return new Map((actors ?? []).map((a) => [a.actor_id, a.total_points]));
 }
 
 export function teamXp(players: Player[]): number {
