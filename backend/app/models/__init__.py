@@ -8,6 +8,8 @@ from app.models.core import Actor, Cycle, SyncState, Team
 from app.models.events import Comment, RawEvent
 from app.models.insights import Anomaly, Digest
 from app.models.issues import Issue, IssueHistory
+from app.models.labels import IssueTag, IssueTagHistory, Tag
+from app.models.points import PointsEvent, UnscoredTicket
 
 __all__ = [
     "Team",
@@ -20,4 +22,9 @@ __all__ = [
     "RawEvent",
     "Anomaly",
     "Digest",
+    "Tag",
+    "IssueTag",
+    "IssueTagHistory",
+    "PointsEvent",
+    "UnscoredTicket",
 ]

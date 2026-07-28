@@ -17,7 +17,7 @@ import logging
 from collections.abc import Iterable
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,10 +26,22 @@ from app.linear.client import (
     LinearComment,
     LinearCycle,
     LinearIssue,
+    LinearLabel,
     LinearTeam,
     LinearUser,
 )
-from app.models import Actor, Comment, Cycle, Issue, IssueHistory, RawEvent, Team
+from app.models import (
+    Actor,
+    Comment,
+    Cycle,
+    Issue,
+    IssueHistory,
+    IssueTag,
+    IssueTagHistory,
+    RawEvent,
+    Tag,
+    Team,
+)
 
 logger = logging.getLogger("app.normalizer")
 
@@ -292,3 +304,114 @@ async def upsert_comments(session: AsyncSession, comments: list[LinearComment]) 
     )
     await session.execute(stmt)
     return len(rows)
+
+
+async def upsert_labels(session: AsyncSession, labels: list[LinearLabel]) -> int:
+    """Upsert the label dictionary into `tags` — the dimension the
+    Engineering Points system (app/jobs/score_points.py) reads."""
+    if not labels:
+        return 0
+    await _land_raw(session, "IssueLabel", labels)
+    team_map = await _id_map(session, Team)
+    actor_map = await _id_map(session, Actor)
+    rows = [
+        {
+            "linear_id": lbl.id,
+            "team_id": team_map.get(lbl.team_id),
+            "name": lbl.name,
+            "color_code": lbl.color,
+            "created_by_id": actor_map.get(lbl.creator_id),
+        }
+        for lbl in labels
+    ]
+    stmt = pg_insert(Tag).values(rows)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[Tag.linear_id],
+        set_={
+            "team_id": stmt.excluded.team_id,
+            "name": stmt.excluded.name,
+            "color_code": stmt.excluded.color_code,
+            "created_by_id": stmt.excluded.created_by_id,
+            "row_updated_at": func.now(),
+        },
+    )
+    await session.execute(stmt)
+    return len(rows)
+
+
+async def upsert_issue_tags(session: AsyncSession, issues: list[LinearIssue]) -> tuple[int, int]:
+    """Diff each issue's incoming label set against `issue_tags`, upsert the
+    current-state table, and append add/remove rows to `issue_tag_history`.
+
+    Same snapshot-before-overwrite-then-diff idiom `upsert_issues` already
+    uses for (state, state_type), applied to label SETS instead — the one
+    genuinely new piece this port adds. `changed_at` is this poll's
+    timestamp, not the label's true edit instant (Linear has no bulk
+    label-history API), same limitation issue_history already accepts for
+    state transitions. Returns (issue_tags rows touched, history rows written).
+    """
+    if not issues:
+        return 0, 0
+    issue_map = await _id_map(session, Issue)
+    tag_map = await _id_map(session, Tag)
+
+    incoming: dict[int, set[int]] = {}
+    for it in issues:
+        issue_id = issue_map.get(it.id)
+        if issue_id is None:
+            continue
+        incoming[issue_id] = {tag_map[lid] for lid in it.label_ids if lid in tag_map}
+
+    if not incoming:
+        return 0, 0
+
+    res = await session.execute(
+        select(IssueTag.issue_id, IssueTag.tag_id).where(
+            IssueTag.issue_id.in_(incoming.keys()), IssueTag.removed_at.is_(None)
+        )
+    )
+    current: dict[int, set[int]] = {}
+    for issue_id, tag_id in res.all():
+        current.setdefault(issue_id, set()).add(tag_id)
+
+    now = datetime.now(UTC)
+    added_pairs: list[tuple[int, int]] = []
+    removed_pairs: list[tuple[int, int]] = []
+    for issue_id, want in incoming.items():
+        have = current.get(issue_id, set())
+        added_pairs.extend((issue_id, tag_id) for tag_id in want - have)
+        removed_pairs.extend((issue_id, tag_id) for tag_id in have - want)
+
+    if added_pairs:
+        stmt = pg_insert(IssueTag).values(
+            [
+                {"issue_id": i, "tag_id": t, "added_at": now, "removed_at": None}
+                for i, t in added_pairs
+            ]
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[IssueTag.issue_id, IssueTag.tag_id],
+            set_={"added_at": now, "removed_at": None},
+        )
+        await session.execute(stmt)
+
+    if removed_pairs:
+        await session.execute(
+            IssueTag.__table__.update()
+            .where(tuple_(IssueTag.issue_id, IssueTag.tag_id).in_(removed_pairs))
+            .values(removed_at=now)
+        )
+
+    history_rows = [
+        {"issue_id": i, "tag_id": t, "action": "added", "changed_at": now}
+        for i, t in added_pairs
+    ] + [
+        {"issue_id": i, "tag_id": t, "action": "removed", "changed_at": now}
+        for i, t in removed_pairs
+    ]
+    if history_rows:
+        conn = await session.connection()
+        await ensure_month_partition(conn, "issue_tag_history", now)
+        await session.execute(pg_insert(IssueTagHistory), history_rows)
+
+    return len(added_pairs) + len(removed_pairs), len(history_rows)

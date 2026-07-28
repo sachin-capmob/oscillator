@@ -6,8 +6,15 @@ import { useRange } from "@/components/shell";
 import { AreaChart, BarChart, type SeriesDef } from "@/components/charts";
 import { EmptyState, ErrorState, Eyebrow, LoadingPanel, Panel, Section, formatDate } from "@/components/ui";
 import { PlayerCard } from "@/components/game";
-import { buildRoster } from "@/lib/game";
-import type { ActorStat, ByActorResp, Overview, ThroughputByActorResp, ActorIssuesResp } from "@/lib/types";
+import { buildPointsMap, buildRoster } from "@/lib/game";
+import type {
+  ActorStat,
+  ByActorResp,
+  Overview,
+  PointsByActorResp,
+  ThroughputByActorResp,
+  ActorIssuesResp,
+} from "@/lib/types";
 
 const PERSON_SERIES: SeriesDef[] = [
   { key: "Completed", name: "Completed", tone: "signal" },
@@ -205,13 +212,16 @@ export default function PeoplePage() {
   const table = useInsight<ByActorResp>("by-actor", range, anchor, refreshKey);
   const overview = useInsight<Overview>("overview", range, anchor, refreshKey);
   const series = useInsight<ThroughputByActorResp>("throughput-by-actor", range, anchor, refreshKey);
+  const points = useInsight<PointsByActorResp>("points/by-actor", range, anchor, refreshKey);
 
   const actors = table.data?.actors ?? [];
 
   // Gamified player profiles — XP, level, streaks, badges — from the same
-  // aggregate data the roster table uses. Global avg cycle time (from overview)
-  // drives the under-average XP bonus so numbers match the Overview leaderboard.
-  const players = buildRoster(actors, overview.data?.avg_cycle_hours.current ?? null, anchor);
+  // aggregate data the roster table uses. XP is real Engineering Points
+  // (points/by-actor), so these numbers match the Overview leaderboard.
+  const pointsMap = buildPointsMap(points.data?.actors);
+  const players = buildRoster(actors, overview.data?.avg_cycle_hours.current ?? null, anchor, pointsMap);
+  const rosterLoading = table.loading || points.loading;
 
   // Everyone's output side by side — completed vs. created, ranked by
   // throughput so the leaderboard reads top-down.
@@ -247,7 +257,7 @@ export default function PeoplePage() {
           <Panel>
             <ErrorState message={table.error} />
           </Panel>
-        ) : table.loading ? (
+        ) : rosterLoading ? (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
             {[0, 1, 2].map((i) => (
               <div key={i} className="relative h-72 border border-edge bg-surface">

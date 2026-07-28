@@ -91,11 +91,15 @@ class LinearIssue(BaseModel):
     completed_at: datetime | None = None
     canceled_at: datetime | None = None
     updated_at: datetime | None = None
+    # Label ids currently attached — the Engineering Points system reads
+    # these (see app/services/normalizer.py's upsert_issue_tags).
+    label_ids: list[str] = []
     raw: dict[str, Any]
 
     @classmethod
     def from_node(cls, n: dict) -> LinearIssue:
         state = n.get("state") or {}
+        labels = (n.get("labels") or {}).get("nodes") or []
         return cls(
             id=n["id"], identifier=n.get("identifier"), title=n.get("title"),
             team_id=_nested_id(n, "team"), assignee_id=_nested_id(n, "assignee"),
@@ -107,7 +111,28 @@ class LinearIssue(BaseModel):
             started_at=_parse_dt(n.get("startedAt")),
             completed_at=_parse_dt(n.get("completedAt")),
             canceled_at=_parse_dt(n.get("canceledAt")),
-            updated_at=_parse_dt(n.get("updatedAt")), raw=n,
+            updated_at=_parse_dt(n.get("updatedAt")),
+            label_ids=[lbl["id"] for lbl in labels if lbl.get("id")],
+            raw=n,
+        )
+
+
+class LinearLabel(BaseModel):
+    """A workspace or team-scoped issue label, e.g. 'type:bug-fix', 'triaged'."""
+
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    name: str
+    color: str | None = None
+    team_id: str | None = None
+    creator_id: str | None = None
+    raw: dict[str, Any]
+
+    @classmethod
+    def from_node(cls, n: dict) -> LinearLabel:
+        return cls(
+            id=n["id"], name=n.get("name") or "", color=n.get("color"),
+            team_id=_nested_id(n, "team"), creator_id=_nested_id(n, "creator"), raw=n,
         )
 
 
@@ -171,7 +196,18 @@ query($first:Int!,$after:String,$since:DateTimeOrDuration!){
       id identifier title priority estimate
       createdAt startedAt completedAt canceledAt updatedAt
       state{ name type } assignee{ id } creator{ id } team{ id } cycle{ id } project{ id }
+      labels{ nodes{ id } }  # unpaginated nested connection; Linear's default page is
+                              # far more than any issue needs (the scoring doc's label
+                              # scheme puts ~4-6 labels on a ticket at most)
     }
+    pageInfo{ hasNextPage endCursor }
+  }
+}"""
+
+_LABELS = """
+query($first:Int!,$after:String){
+  issueLabels(first:$first, after:$after){
+    nodes{ id name color team{ id } creator{ id } }
     pageInfo{ hasNextPage endCursor }
   }
 }"""
@@ -288,3 +324,10 @@ class LinearClient:
         s = _iso(since or FULL_BACKFILL_SINCE)
         nodes = await self._paginate(_CYCLES, "cycles", {"since": s})
         return [LinearCycle.from_node(n) for n in nodes]
+
+    async def fetch_labels(self) -> list[LinearLabel]:
+        """All workspace/team issue labels. No `since` filter — like teams
+        and users, the label dictionary is small and cheap to re-pull in
+        full every sync (see app/jobs/sync.py)."""
+        nodes = await self._paginate(_LABELS, "issueLabels", {})
+        return [LinearLabel.from_node(n) for n in nodes]

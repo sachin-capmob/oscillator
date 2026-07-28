@@ -85,12 +85,13 @@ async def run_sync() -> dict:
     async with LinearClient() as client:
         teams = await client.fetch_teams()
         users = await client.fetch_users()
+        labels = await client.fetch_labels()
         cycles = await client.fetch_cycles(since)
         issues = await client.fetch_issues(since)
         comments = await client.fetch_comments(since)
     pulled = {
-        "teams": len(teams), "users": len(users), "cycles": len(cycles),
-        "issues": len(issues), "comments": len(comments),
+        "teams": len(teams), "users": len(users), "labels": len(labels),
+        "cycles": len(cycles), "issues": len(issues), "comments": len(comments),
     }
     logger.info("Pulled: %s", pulled)
 
@@ -102,6 +103,8 @@ async def run_sync() -> dict:
         async with session.begin():
             counts["actors"] = await normalizer.upsert_actors(session, users)
         async with session.begin():
+            counts["labels"] = await normalizer.upsert_labels(session, labels)
+        async with session.begin():
             counts["cycles"] = await normalizer.upsert_cycles(session, cycles)
         async with session.begin():
             counts["issues"], counts["transitions"] = await normalizer.upsert_issues(
@@ -109,6 +112,10 @@ async def run_sync() -> dict:
             )
         async with session.begin():
             counts["comments"] = await normalizer.upsert_comments(session, comments)
+        async with session.begin():
+            counts["issue_tags"], counts["tag_history"] = await normalizer.upsert_issue_tags(
+                session, issues
+            )
     logger.info("Upserted: %s", counts)
 
     # --- refresh rollups ---
