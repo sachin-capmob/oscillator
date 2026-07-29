@@ -223,6 +223,13 @@ export default function PeoplePage() {
   const players = buildRoster(actors, overview.data?.avg_cycle_hours.current ?? null, anchor, pointsMap);
   const rosterLoading = table.loading || points.loading;
 
+  // The People table doubles as a leaderboard — ranked by real Engineering
+  // Points (ties broken by throughput), not raw throughput.
+  const leaderboardActors = [...actors].sort((a, b) => {
+    const diff = (pointsMap.get(b.actor_id) ?? 0) - (pointsMap.get(a.actor_id) ?? 0);
+    return diff !== 0 ? diff : b.throughput - a.throughput;
+  });
+
   // Everyone's output side by side — completed vs. created, ranked by
   // throughput so the leaderboard reads top-down.
   const compareData = [...actors]
@@ -280,18 +287,18 @@ export default function PeoplePage() {
 
       <Section
         title="People"
-        description="Per-person activity for the selected range. Trend = last 7 periods completed."
+        description="Per-person activity for the selected range, ranked by Engineering Points. Trend = last 7 periods completed."
       >
         <Panel
-          loading={table.loading}
-          eyebrow="Roster"
+          loading={rosterLoading}
+          eyebrow="Leaderboard"
           title="Activity by person"
           subtitle={`${actors.length} active this range`}
           bodyClassName="p-0"
         >
           {table.error ? (
             <ErrorState message={table.error} />
-          ) : table.loading ? (
+          ) : rosterLoading ? (
             <div className="p-6">
               <LoadingPanel height="h-64" />
             </div>
@@ -303,6 +310,7 @@ export default function PeoplePage() {
                 <thead>
                   <tr className="border-b border-edge">
                     <Th align="left">Name</Th>
+                    <Th align="right">Points</Th>
                     <Th align="right">Throughput</Th>
                     <Th align="right">Avg cycle</Th>
                     <Th align="right">Created</Th>
@@ -311,8 +319,8 @@ export default function PeoplePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {actors.map((a, i) => (
-                    <Row key={a.actor_id} actor={a} even={i % 2 === 0} />
+                  {leaderboardActors.map((a, i) => (
+                    <Row key={a.actor_id} actor={a} points={pointsMap.get(a.actor_id) ?? 0} even={i % 2 === 0} />
                   ))}
                 </tbody>
               </table>
@@ -396,7 +404,7 @@ function Th({ children, align }: { children: React.ReactNode; align: "left" | "r
   );
 }
 
-function Row({ actor: a, even }: { actor: ActorStat; even: boolean }) {
+function Row({ actor: a, points, even }: { actor: ActorStat; points: number; even: boolean }) {
   const name = a.name ?? a.email ?? `Actor ${a.actor_id}`;
   return (
     <tr
@@ -404,6 +412,9 @@ function Row({ actor: a, even }: { actor: ActorStat; even: boolean }) {
       style={{ background: even ? "var(--surface)" : "var(--void)" }}
     >
       <td className="px-6 py-3.5 text-body text-ink">{name}</td>
+      <td className="px-6 py-3.5 text-right font-mono text-body font-medium" style={{ color: "var(--xp-amber)" }}>
+        {points}
+      </td>
       <td className="px-6 py-3.5 text-right font-mono text-body text-ink">{a.throughput}</td>
       <td className="px-6 py-3.5 text-right font-mono text-body text-muted">
         {a.avg_cycle_hours ?? "--"}
