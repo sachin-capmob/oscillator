@@ -62,7 +62,8 @@ async def _seed_common(session) -> None:
         ],
     )
     all_labels = [
-        "type:bug-find", "type:bug-fix", "type:security", "type:perf", "triaged", "reverted",
+        "type:bug-find", "type:bug-fix", "type:security", "type:perf",
+        "type:docs", "type:doc", "triaged", "reverted",
         "rca-done", "own-code",
         "sev:critical", "sev:major", "sev:minor",
         "area:infra", "area:backend", "area:frontend", "area:design",
@@ -296,6 +297,36 @@ async def test_multi_category_ticket_held_for_review_pending_confirmed_subscale(
             )
         ).scalar_one()
         assert reason == "needs_review"
+
+
+@pytest.mark.asyncio
+async def test_docs_scores_via_size_and_doc_typo_is_an_alias():
+    """type:docs used to sit permanently in needs_review; it's now scored
+    via size:* like any other sized category. type:doc (the typo the team
+    actually uses on several tickets) must resolve to the exact same
+    category and points.
+    """
+    Session = get_sessionmaker()
+    async with Session() as session:
+        async with session.begin():
+            await _seed_common(session)
+    async with Session() as session:
+        async with session.begin():
+            correctly_spelled = _issue(
+                "docs-correct", owner="assignee-b", creator="reporter-a", closed=True,
+                label_ids=["type:docs", "size:m"],
+            )
+            typo = _issue(
+                "docs-typo", owner="assignee-b", creator="reporter-a", closed=True,
+                label_ids=["type:doc", "size:l"],
+            )
+            await _seed_issues(session, [correctly_spelled, typo])
+
+    await run_score_points()
+
+    async with Session() as session:
+        assert await _awards_for(session, "docs-correct") == [("award", "docs", 2)]
+        assert await _awards_for(session, "docs-typo") == [("award", "docs", 3)]
 
 
 @pytest.mark.asyncio
