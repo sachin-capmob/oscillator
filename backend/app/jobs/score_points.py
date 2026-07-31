@@ -74,10 +74,11 @@ OVERLAP = timedelta(hours=2)
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
 # Categories that need a signal the current label scheme can't express yet
-# (security's sub-severity scale, perf's before/after number, copy/docs'
+# (security's sub-severity scale, perf's before/after number, copy's
 # small-vs-large split) — always held for manual review, never auto-scored.
-# See points_rules.py and the plan's open questions.
-_NEEDS_REVIEW_CATEGORIES = {"security", "perf", "copy", "docs"}
+# docs used to be here too, but it's now scored via size:* like any other
+# sized category — see points_rules.py's SIZED_POINTS["docs"].
+_NEEDS_REVIEW_CATEGORIES = {"security", "perf", "copy"}
 
 # Any tag whose ADDITION should make an issue a scoring candidate again
 # (see _gather_candidates) — every tag _resolve_categories actually reads.

@@ -11,7 +11,7 @@ records exactly which rules produced it.
 
 from __future__ import annotations
 
-RULES_VERSION = "2026-07-27-v1"
+RULES_VERSION = "2026-07-31-v2"
 
 # --- Bug points: [area][severity] -> (find_points, fix_points) -------------
 BUG_POINTS: dict[str, dict[str, tuple[int, int]]] = {
@@ -32,6 +32,12 @@ SIZED_POINTS: dict[str, dict[str, int]] = {
     # app.jobs.score_points), so this table is only reached once that's
     # confirmed some other way; until then these tickets sit unscored.
     "perf": {"s": 2, "m": 5, "l": 10},
+    # The doc's own flat scale for docs was 1 (small) / 3 (large), but no
+    # small/large tag ever got adopted — the team already tags docs work
+    # with the same size:s/m/l scheme as everything else, so this reuses
+    # that signal instead of waiting on a tag that doesn't exist. Endpoints
+    # match the doc's original 1/3 range, with "m" filling the middle tier.
+    "docs": {"s": 1, "m": 2, "l": 3},
 }
 
 # --- Flat-rate categories: same value regardless of size --------------------
@@ -43,8 +49,6 @@ FLAT_POINTS: dict[str, int] = {
     "copy_small": 1,  # error messages, microcopy
     "copy_large": 3,  # landing page, onboarding
     "a11y": 2,  # per screen or component
-    "docs_small": 1,  # README section, inline docs
-    "docs_large": 3,  # runbook, architecture doc, onboarding guide
     "ops_save": 5,  # caught before it broke
     "incident": 8,  # mitigated a live incident
     "incident_rca_bonus": 4,  # RCA writeup, added on top of the incident award
@@ -80,7 +84,8 @@ TYPE_TAG_TO_CATEGORY: dict[str, str] = {
     "type:analytics": "analytics",
     "type:copy": "copy",  # small/large resolved separately via size-ish tags, see score_points
     "type:a11y": "a11y",
-    "type:docs": "docs",  # small/large resolved separately via size-ish tags, see score_points
+    "type:docs": "docs",  # scored via size:*, see SIZED_POINTS
+    "type:doc": "docs",  # common typo for type:docs seen in practice — same category
 }
 
 BUG_CATEGORIES = {"bug_find", "bug_fix"}
