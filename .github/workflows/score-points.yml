@@ -1,14 +1,13 @@
 name: Engineering Points Scoring
 
-# Nightly, scheduled after the Linear sync so the day's closed tickets and
-# label changes are already landed. Read-only over already-normalized
-# data — no Linear API calls, so this doesn't compete with sync.yml's rate
-# budget.
+# Hourly, offset 15 minutes after the Linear sync (sync.yml, :00) so that
+# hour's closed tickets and label changes are already landed. Read-only
+# over already-normalized data — no Linear API calls, so this doesn't
+# compete with sync.yml's rate budget. Nightly-only left too big a gap
+# between a ticket closing and its points showing up on the dashboard.
 on:
   schedule:
-    # 03:30 UTC — well after the hourly sync (sync.yml, :00) has had a full
-    # cycle to land the day's activity.
-    - cron: "30 3 * * *"
+    - cron: "15 * * * *"
   workflow_dispatch: {}
 
 # Never let two scoring runs overlap (they share the sync_state watermark).
