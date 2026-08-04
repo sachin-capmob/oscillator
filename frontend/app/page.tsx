@@ -3,7 +3,6 @@
 import { useInsight } from "@/lib/api";
 import { useRange } from "@/components/shell";
 import { AreaChart, type SeriesDef } from "@/components/charts";
-import { DigestBanner } from "@/components/digest";
 import {
   Leaderboard,
   SprintQuestCard,
@@ -125,11 +124,6 @@ export default function OverviewPage() {
             : "Loading the current period…"
         }
       >
-        {/* Narrative digest — what changed this period and why it matters */}
-        <div className="mb-6">
-          <DigestBanner />
-        </div>
-
         {/* Sprint quest — the headline objective, above everything else */}
         <div className="mb-6">
           {quest ? (

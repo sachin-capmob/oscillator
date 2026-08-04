@@ -134,8 +134,8 @@ async def unscored_tickets(
 ) -> UnscoredResponse:
     """Currently-unresolved unscored tickets (a queue, not a period-scoped
     metric — every outstanding ticket is returned regardless of when it was
-    detected). `range` is accepted for URL symmetry with the other points
-    endpoints, same as `digest`'s `anchor` param in app/api/insights.py."""
+    detected). `range` is accepted only for URL symmetry with the other
+    points endpoints."""
     rows = (
         await session.execute(
             select(UnscoredTicket, Issue.identifier, Issue.title, Actor.name)
