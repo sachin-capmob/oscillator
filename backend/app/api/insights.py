@@ -22,13 +22,10 @@ from app.schemas.insights import (
     ActorStat,
     ActorThroughputPoint,
     ActorThroughputStat,
-    AnomaliesResponse,
-    AnomalyItem,
     ByActorResponse,
     ByTeamResponse,
     CycleTimePoint,
     CycleTimeResponse,
-    DigestResponse,
     DualPoint,
     Metric,
     OverviewResponse,
@@ -659,86 +656,6 @@ async def by_team(
     return ByTeamResponse(range=range, period_start=period_start, teams=teams)
 
 
-def _anomaly_bucket(rng: Range, ref: datetime) -> date:
-    """The period-bucket start that anomaly detection stamps for `ref`.
-
-    Detection runs on weekly buckets (and monthly for the month range), so day
-    and week map to the current ISO week's Monday; month maps to the 1st."""
-    d = ref.date()
-    if rng is Range.month:
-        return d.replace(day=1)
-    return d - timedelta(days=d.weekday())
-
-
-@router.get("/anomalies", response_model=AnomaliesResponse)
-async def anomalies(
-    range: Range = Query(default=Range.week),
-    anchor: date | None = Query(default=None),
-    session: AsyncSession = Depends(get_session),
-) -> AnomaliesResponse:
-    """Flagged metric deviations for the period-bucket covering the anchor.
-
-    Read-only — rows are produced by the cron sync (services/anomaly.py)."""
-    bucket = _anomaly_bucket(range, _ref(anchor))
-    rows = (
-        await session.execute(
-            text(
-                """
-                SELECT scope, entity_id, entity_name, metric, period,
-                       direction, severity, observed, baseline, stddev, z_score
-                FROM anomalies
-                WHERE period = :bucket
-                ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'warn' THEN 1 ELSE 2 END,
-                         abs(z_score) DESC
-                """
-            ),
-            {"bucket": bucket},
-        )
-    ).mappings().all()
-    items = [AnomalyItem(**r) for r in rows]
-    return AnomaliesResponse(period=bucket, count=len(items), anomalies=items)
-
-
-@router.get("/digest", response_model=DigestResponse)
-async def digest(
-    range: Range = Query(default=Range.week),
-    anchor: date | None = Query(default=None),  # noqa: ARG001 — see note below
-    session: AsyncSession = Depends(get_session),
-) -> DigestResponse:
-    """Latest cached narrative for the range.
-
-    Digests are generated for the real "now" each sync, so we serve the most
-    recent one for this range rather than keying on the scrubbed anchor (a past
-    anchor has no bespoke digest). `anchor` is accepted for URL symmetry with the
-    other endpoints but does not select a historical digest."""
-    row = (
-        await session.execute(
-            text(
-                """
-                SELECT range, anchor, summary, source, model,
-                       anomaly_count, generated_at
-                FROM digests
-                WHERE range = :range
-                ORDER BY generated_at DESC
-                LIMIT 1
-                """
-            ),
-            {"range": range.value},
-        )
-    ).mappings().first()
-
-    if row is None:
-        return DigestResponse(
-            range=range,
-            anchor=_ref(None).date(),
-            summary="No digest has been generated yet. It appears after the next sync.",
-            source="template",
-            anomaly_count=0,
-            available=False,
-        )
-    return DigestResponse(**row, available=True)
-
-
 @router.get("/actor-issues", response_model=ActorIssuesResponse)
 async def actor_issues(
     actor_id: int = Query(...),
@@ -771,12 +688,19 @@ async def actor_issues(
                   i.completed_at,
                   CASE WHEN i.started_at IS NOT NULL
                        THEN extract(epoch FROM i.completed_at - i.started_at) / 3600.0
-                  END AS cycle_hours
+                  END AS cycle_hours,
+                  COALESCE(
+                    array_agg(tg.name ORDER BY tg.name) FILTER (WHERE tg.name IS NOT NULL),
+                    '{{}}'
+                  ) AS labels
                 FROM issues i
                 LEFT JOIN teams t ON t.id = i.team_id
+                LEFT JOIN issue_tags it ON it.issue_id = i.id AND it.removed_at IS NULL
+                LEFT JOIN tags tg ON tg.id = it.tag_id
                 WHERE i.assignee_id = :actor_id
                   AND i.completed_at >= :cs
                   AND i.completed_at < :ce
+                GROUP BY i.id, i.title, i.identifier, t.name, i.completed_at, i.started_at
                 ORDER BY i.completed_at DESC
                 """
             ),
@@ -792,6 +716,7 @@ async def actor_issues(
             team_name=r["team_name"],
             completed_at=r["completed_at"],
             cycle_hours=round(r["cycle_hours"], 2) if r["cycle_hours"] is not None else None,
+            labels=list(r["labels"]),
         )
         for r in rows
     ]
