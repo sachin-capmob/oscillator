@@ -170,13 +170,26 @@ function PersonIssuesPanel({ actors }: { actors: ActorStat[] }) {
                   </span>
                 )}
 
-                {/* Title + team */}
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                {/* Title + team + labels */}
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="truncate text-body text-ink">
                     {issue.title ?? "(Untitled)"}
                   </span>
                   {issue.team_name && (
                     <span className="text-[11px] text-muted">{issue.team_name}</span>
+                  )}
+                  {issue.labels.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {issue.labels.map((label) => (
+                        <span
+                          key={label}
+                          className="rounded px-1.5 py-0.5 text-[10px] font-medium"
+                          style={{ background: "var(--edge)", color: "var(--muted)" }}
+                        >
+                          {label}
+                        </span>
+                      ))}
+                    </div>
                   )}
                 </div>
 

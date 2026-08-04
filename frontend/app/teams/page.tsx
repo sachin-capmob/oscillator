@@ -107,17 +107,6 @@ export default function CyclesPage() {
           )}
         </Panel>
       </div>
-
-      {/* Per-team detail cards */}
-      {!loading && !empty && (
-        <Section title="Team detail" description="Per-team breakdown for the current period.">
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
-            {teams.map((t) => (
-              <TeamCard key={t.team_id} team={t} />
-            ))}
-          </div>
-        </Section>
-      )}
     </div>
   );
 }
@@ -164,51 +153,3 @@ function CycleRow({ team: t }: { team: TeamStat }) {
   );
 }
 
-function TeamCard({ team: t }: { team: TeamStat }) {
-  const name = t.name ?? t.key ?? `Team ${t.team_id}`;
-  return (
-    <div className="border border-edge bg-surface px-6 py-6">
-      <div className="flex items-center gap-2.5">
-        <span
-          aria-hidden
-          className="inline-block h-3.5 w-px shrink-0"
-          style={{ background: "var(--signal)" }}
-        />
-        <h3 className="truncate text-title font-medium text-ink">{name}</h3>
-      </div>
-      <div className="mt-4 flex items-baseline gap-2">
-        <span className="font-mono text-callout font-light text-ink">{t.throughput}</span>
-        <span className="font-mono text-body text-muted">completed</span>
-      </div>
-      <dl className="mt-5 flex flex-col gap-2.5 text-body">
-        <Stat label="Avg cycle" value={t.avg_cycle_hours} suffix="h" />
-        <Stat label="Median cycle" value={t.median_cycle_hours} suffix="h" />
-        <Stat label="WIP" value={t.wip} />
-        <Stat label="Comments" value={t.comments} />
-        <Stat label="Scope added" value={t.scope_added} negative={t.scope_added > 0} />
-      </dl>
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  suffix = "",
-  negative = false,
-}: {
-  label: string;
-  value: number | null;
-  suffix?: string;
-  negative?: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between border-t border-edge pt-2.5 first:border-t-0 first:pt-0">
-      <dt className="text-muted">{label}</dt>
-      <dd className="font-mono" style={{ color: negative ? "var(--negative)" : "var(--ink)" }}>
-        {value ?? "--"}
-        {value != null && suffix}
-      </dd>
-    </div>
-  );
-}
