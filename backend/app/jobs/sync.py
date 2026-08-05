@@ -145,7 +145,6 @@ def main() -> int:
     print(f"pulled:     {result['pulled']}")
     print(f"upserted:   {result['upserted']}")
     print(f"views:      {result['views_refreshed'] or '(none yet)'}")
-    print(f"analytics:  {result['analytics']}")
     return 0
 
 
