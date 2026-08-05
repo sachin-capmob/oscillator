@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from "react";
 
-import type { Range } from "./types";
+import type { PointsLedgerResp, Range } from "./types";
 
 export async function fetchInsight<T>(
   path: string,
@@ -60,5 +60,20 @@ export async function fetchActorIssues(
   if (anchor) qs.set("anchor", anchor);
   const res = await fetch(`/api/insights/actor-issues?${qs.toString()}`, { cache: "no-store" });
   if (!res.ok) throw new Error(`actor-issues failed (${res.status})`);
+  return res.json();
+}
+
+/** Fetch the raw Engineering Points ledger for one actor in the selected
+ * range — the award/reversal/bonus rows behind their total, each carrying
+ * the exact label set that produced it (label_state). */
+export async function fetchPointsLedger(
+  actorId: number,
+  range: Range,
+  anchor?: string,
+): Promise<PointsLedgerResp> {
+  const qs = new URLSearchParams({ actor_id: String(actorId), range, limit: "200" });
+  if (anchor) qs.set("anchor", anchor);
+  const res = await fetch(`/api/insights/points/ledger?${qs.toString()}`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`points/ledger failed (${res.status})`);
   return res.json();
 }

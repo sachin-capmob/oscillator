@@ -9,6 +9,7 @@
 
 import { CountUp, Eyebrow } from "@/components/ui";
 import { formatDate } from "@/components/ui";
+import { PointsBreakdownButton } from "@/components/points-breakdown";
 import {
   XP_BLUE,
   XP_TEAL,
@@ -18,6 +19,7 @@ import {
   type SprintQuest,
   type StreakInfo,
 } from "@/lib/game";
+import type { Range } from "@/lib/types";
 
 const NEG = "var(--negative)";
 
@@ -127,7 +129,15 @@ export function StreakFlame({ streak, className = "" }: { streak: number; classN
 /* -------------------------------------------------------------------------- */
 /* Leaderboard — ranks players by XP, colour-coded bars, medals + streaks.    */
 /* -------------------------------------------------------------------------- */
-export function Leaderboard({ players }: { players: Player[] }) {
+export function Leaderboard({
+  players,
+  range,
+  anchor,
+}: {
+  players: Player[];
+  range: Range;
+  anchor?: string;
+}) {
   const maxXp = Math.max(1, ...players.map((p) => p.xp));
   return (
     <div className="flex flex-col">
@@ -144,12 +154,13 @@ export function Leaderboard({ players }: { players: Player[] }) {
             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
               <div className="flex items-center justify-between gap-3">
                 <span className="truncate text-body text-ink">{p.name}</span>
-                <span className="flex shrink-0 items-center gap-2.5">
+                <span className="flex shrink-0 items-center gap-2">
                   <StreakFlame streak={p.streak.streak} />
                   <span className="font-mono text-body" style={{ color }}>
                     {fmtXp(p.xp)}
                     <span className="ml-1 text-[11px] text-muted">XP</span>
                   </span>
+                  <PointsBreakdownButton actorId={p.actorId} name={p.name} range={range} anchor={anchor} />
                 </span>
               </div>
               <XpBar pct={barPct} color={color} height={6} sheen={i === 0} />

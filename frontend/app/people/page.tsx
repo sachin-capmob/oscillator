@@ -6,12 +6,14 @@ import { useRange } from "@/components/shell";
 import { AreaChart, BarChart, type SeriesDef } from "@/components/charts";
 import { EmptyState, ErrorState, Eyebrow, LoadingPanel, Panel, Section, formatDate } from "@/components/ui";
 import { PlayerCard } from "@/components/game";
+import { PointsBreakdownButton } from "@/components/points-breakdown";
 import { buildPointsMap, buildRoster } from "@/lib/game";
 import type {
   ActorStat,
   ByActorResp,
   Overview,
   PointsByActorResp,
+  Range,
   ThroughputByActorResp,
   ActorIssuesResp,
 } from "@/lib/types";
@@ -333,7 +335,14 @@ export default function PeoplePage() {
                 </thead>
                 <tbody>
                   {leaderboardActors.map((a, i) => (
-                    <Row key={a.actor_id} actor={a} points={pointsMap.get(a.actor_id) ?? 0} even={i % 2 === 0} />
+                    <Row
+                      key={a.actor_id}
+                      actor={a}
+                      points={pointsMap.get(a.actor_id) ?? 0}
+                      even={i % 2 === 0}
+                      range={range}
+                      anchor={anchor}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -417,7 +426,19 @@ function Th({ children, align }: { children: React.ReactNode; align: "left" | "r
   );
 }
 
-function Row({ actor: a, points, even }: { actor: ActorStat; points: number; even: boolean }) {
+function Row({
+  actor: a,
+  points,
+  even,
+  range,
+  anchor,
+}: {
+  actor: ActorStat;
+  points: number;
+  even: boolean;
+  range: Range;
+  anchor?: string;
+}) {
   const name = a.name ?? a.email ?? `Actor ${a.actor_id}`;
   return (
     <tr
@@ -426,7 +447,10 @@ function Row({ actor: a, points, even }: { actor: ActorStat; points: number; eve
     >
       <td className="px-6 py-3.5 text-body text-ink">{name}</td>
       <td className="px-6 py-3.5 text-right font-mono text-body font-medium" style={{ color: "var(--xp-amber)" }}>
-        {points}
+        <span className="inline-flex items-center justify-end gap-1.5">
+          {points}
+          <PointsBreakdownButton actorId={a.actor_id} name={name} range={range} anchor={anchor} />
+        </span>
       </td>
       <td className="px-6 py-3.5 text-right font-mono text-body text-ink">{a.throughput}</td>
       <td className="px-6 py-3.5 text-right font-mono text-body text-muted">
