@@ -286,6 +286,16 @@ select:focus-visible {
   animation: fut-glow 3.2s ease-in-out infinite;
 }
 
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+.modal-in {
+  animation: modal-in 0.18s ease-out both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .xp-bar-fill,
   .xp-bar-sheen::after,
@@ -293,7 +303,8 @@ select:focus-visible {
   .kpi-pulse,
   .fut-shine::before,
   .fut-in,
-  .fut-glow {
+  .fut-glow,
+  .modal-in {
     animation: none !important;
   }
   .fut-card {

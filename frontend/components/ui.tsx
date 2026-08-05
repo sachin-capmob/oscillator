@@ -249,6 +249,67 @@ export function LoadingPanel({ height = "h-72" }: { height?: string }) {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Modal — centered --surface panel over a --void scrim. Closes on backdrop  */
+/* click or Escape. No animation library — a plain fade via the .modal-in    */
+/* class defined in globals.css.                                             */
+/* -------------------------------------------------------------------------- */
+export function Modal({
+  title,
+  subtitle,
+  onClose,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8"
+      style={{ background: "rgba(0,0,0,0.6)" }}
+      onClick={onClose}
+    >
+      <div
+        className="modal-in flex max-h-full w-full max-w-lg flex-col border border-edge bg-surface"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="flex items-start justify-between gap-4 border-b border-edge px-6 py-5">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <h3 className="flex items-center gap-2.5 text-title font-medium text-ink">
+              <span
+                aria-hidden
+                className="inline-block h-3.5 w-px shrink-0"
+                style={{ background: "var(--signal)" }}
+              />
+              {title}
+            </h3>
+            {subtitle && <p className="text-body text-muted">{subtitle}</p>}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="shrink-0 border border-edge px-2 py-1 text-body text-muted hover:text-ink"
+          >
+            ✕
+          </button>
+        </header>
+        <div className="overflow-y-auto">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* Recharts tooltip — --surface bg, 1px --edge border, no shadow, mono nums.  */
 /* -------------------------------------------------------------------------- */
 export function ChartTooltip({

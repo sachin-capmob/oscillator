@@ -216,7 +216,7 @@ export default function OverviewPage() {
           ) : players.length === 0 ? (
             <EmptyState message="No contributors this range." />
           ) : (
-            <Leaderboard players={players.slice(0, 8)} />
+            <Leaderboard players={players.slice(0, 8)} range={range} anchor={anchor} />
           )}
         </Panel>
       </div>
