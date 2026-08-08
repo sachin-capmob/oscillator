@@ -39,6 +39,7 @@ const NAV = [
   { href: "/squad", label: "Squad" },
   { href: "/teams", label: "Cycles" },
   { href: "/issues", label: "Issues" },
+  { href: "/report", label: "Report" },
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {
@@ -77,7 +78,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <div className="min-h-screen bg-void">
         {/* Top navigation rail — 56px, --edge bottom border only. Inner content
             is centered to the same max-width gutter as the page body. */}
-        <header className="sticky top-0 z-30 h-14 border-b border-edge bg-void">
+        <header className="no-print sticky top-0 z-30 h-14 border-b border-edge bg-void">
           <div className="mx-auto flex h-full max-w-[1600px] items-stretch px-6 lg:px-10">
             <Link
               href="/"
@@ -117,7 +118,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
         {/* Command bar — 52px, --surface; range selector + scrubber share the
             centered gutter so controls line up with the content below. */}
-        <div className="sticky top-14 z-20 border-b border-edge bg-surface">
+        <div className="no-print sticky top-14 z-20 border-b border-edge bg-surface">
           <div className="mx-auto flex h-[52px] max-w-[1600px] items-center gap-6 px-6 lg:px-10">
             <Eyebrowed label="RANGE">
               <Segmented
@@ -172,7 +173,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Date scrubber strip — the secondary control rail */}
-        <div className="border-b border-edge bg-void">
+        <div className="no-print border-b border-edge bg-void">
           <div className="mx-auto max-w-[1600px] px-6 lg:px-10">
             <DateScrubber />
           </div>

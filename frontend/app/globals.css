@@ -325,3 +325,32 @@ select:focus-visible {
   border-radius: 0 !important;
   box-shadow: none !important;
 }
+
+/* ============================================================================
+   Print — used by /report's "Download PDF" (window.print). Strips the app
+   shell (nav, range selector, date scrubber) so only the report content
+   reaches the page; the report itself is styled as plain black-on-white,
+   independent of the dashboard's dark theme, since that's what actually
+   prints/exports well.
+   ============================================================================ */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  html,
+  body,
+  .bg-void,
+  .bg-surface {
+    background: #fff !important;
+  }
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+  .report-page {
+    break-inside: avoid;
+  }
+  .report-row {
+    break-inside: avoid;
+  }
+}
