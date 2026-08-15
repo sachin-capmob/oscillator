@@ -47,7 +47,7 @@ export function Segmented({
             aria-selected={active}
             type="button"
             onClick={() => onChange(o.value)}
-            className="relative z-10 px-4 py-1.5 text-nav font-medium transition-colors"
+            className="relative z-10 px-2.5 py-1.5 text-nav font-medium transition-colors sm:px-4"
             style={{ color: active ? "var(--ink)" : "var(--muted)" }}
           >
             {o.label}

@@ -304,7 +304,7 @@ function PitchChip({ player }: { player: FutPlayer }) {
   const inits = initialsOf({ name: player.base.name, email: null, actor_id: player.base.actorId });
   return (
     <div
-      className="flex w-[104px] flex-col items-center gap-1 px-2 py-2.5"
+      className="flex w-[88px] flex-col items-center gap-1 px-1.5 py-2 sm:w-[104px] sm:px-2 sm:py-2.5"
       style={{ background: skin.gradient, color: skin.ink, border: `1px solid ${skin.rule}` }}
       title={`${player.base.name} · ${player.overall} ${player.position}`}
     >

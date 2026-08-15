@@ -367,14 +367,21 @@ export default function PeoplePage() {
           ) : compareData.length === 0 ? (
             <EmptyState message="No per-person activity in this range." />
           ) : (
-            <BarChart
-              data={compareData}
-              index="name"
-              series={COMPARE_SERIES}
-              horizontal
-              height={compareHeight}
-              categoryWidth={140}
-            />
+            // The 140px name column doesn't shrink with the container, so on a
+            // narrow screen this scrolls horizontally rather than squeezing
+            // names/bars illegible — same pattern as the People table above.
+            <div className="overflow-x-auto">
+              <div style={{ minWidth: 480 }}>
+                <BarChart
+                  data={compareData}
+                  index="name"
+                  series={COMPARE_SERIES}
+                  horizontal
+                  height={compareHeight}
+                  categoryWidth={140}
+                />
+              </div>
+            </div>
           )}
         </Panel>
       </Section>
