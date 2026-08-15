@@ -12,7 +12,7 @@
 // the transition.
 // ============================================================================
 
-import type { ActorStat, Overview, TimePoint } from "./types";
+import type { ActorStat } from "./types";
 
 // ---- Palette ---------------------------------------------------------------
 // The gamification accent palette. XP bars cycle through the first four so
@@ -376,54 +376,4 @@ export function buildPointsMap(actors: { actor_id: number; total_points: number 
 
 export function teamXp(players: Player[]): number {
   return players.reduce((sum, p) => sum + p.xp, 0);
-}
-
-// ---- Sprint quest ----------------------------------------------------------
-export interface SprintQuest {
-  closed: number;
-  target: number; // committed scope = closed + in-flight
-  inFlight: number;
-  progressPct: number;
-  throughputDeltaPct: number | null;
-  daysRemaining: number | null; // null on the all-time range
-  atRisk: number; // in-flight issues above the historical WIP average
-  hitBonus: boolean; // 100% of committed scope closed
-  startISO: string;
-  endISO: string;
-}
-
-/** Derive the sprint-quest state for the anchor's period from the overview. */
-export function deriveSprintQuest(
-  overview: Overview,
-  wipSeries: TimePoint[] | undefined,
-  isAllTime: boolean,
-): SprintQuest {
-  const closed = overview.throughput.current ?? 0;
-  const inFlight = overview.wip ?? 0;
-  const target = Math.max(closed + inFlight, closed, 1);
-  const progressPct = Math.min(100, (closed / target) * 100);
-
-  // Historical WIP average across the visible series → anything above it is "at risk".
-  const wipValues = (wipSeries ?? []).map((p) => p.value ?? 0);
-  const avgWip = wipValues.length ? wipValues.reduce((a, b) => a + b, 0) / wipValues.length : 0;
-  const atRisk = Math.max(0, inFlight - Math.round(avgWip));
-
-  let daysRemaining: number | null = null;
-  if (!isAllTime && overview.period_end) {
-    const end = new Date(overview.period_end).getTime();
-    daysRemaining = Math.max(0, Math.ceil((end - Date.now()) / 86_400_000));
-  }
-
-  return {
-    closed,
-    target,
-    inFlight,
-    progressPct,
-    throughputDeltaPct: overview.throughput.delta_pct,
-    daysRemaining,
-    atRisk,
-    hitBonus: closed > 0 && inFlight === 0,
-    startISO: overview.period_start,
-    endISO: overview.period_end,
-  };
 }

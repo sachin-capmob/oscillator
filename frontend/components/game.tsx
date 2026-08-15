@@ -16,7 +16,6 @@ import {
   xpColor,
   type BadgeState,
   type Player,
-  type SprintQuest,
   type StreakInfo,
 } from "@/lib/game";
 import type { Range } from "@/lib/types";
@@ -341,130 +340,6 @@ export function StreakRow({ player, index }: { player: Player; index: number }) 
       </div>
       <StreakDots streak={s} />
     </div>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* SprintQuestCard — the headline "quest" above the charts.                   */
-/* -------------------------------------------------------------------------- */
-export function SprintQuestCard({
-  quest,
-  periodWord,
-  isAllTime,
-}: {
-  quest: SprintQuest;
-  periodWord: string;
-  isAllTime: boolean;
-}) {
-  const range = `${formatDate(quest.startISO)} → ${
-    isAllTime ? "now" : formatDate(quest.endISO)
-  }`;
-  const delta = quest.throughputDeltaPct;
-
-  return (
-    <div className="relative overflow-hidden border border-edge bg-surface px-6 py-6 sm:px-8">
-      {/* faint accent glow */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full"
-        style={{ background: "radial-gradient(circle, rgba(var(--xp-purple-rgb),0.18), transparent 70%)" }}
-      />
-
-      <div className="relative flex flex-col gap-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2.5">
-              <span className="text-[16px]" aria-hidden>
-                🎯
-              </span>
-              <h3 className="text-title font-medium text-ink">
-                Sprint quest · {range}
-              </h3>
-            </div>
-            <p className="text-body text-muted">
-              Close <span className="font-mono text-ink">{quest.target}</span> issues
-              {!isAllTime && quest.endISO ? (
-                <> before <span className="text-ink">{formatDate(quest.endISO)}</span></>
-              ) : null}
-            </p>
-          </div>
-
-          {/* Countdown */}
-          {!isAllTime && quest.daysRemaining != null && (
-            <div className="flex flex-col items-end">
-              <span className="font-mono text-callout font-light text-ink">
-                {quest.daysRemaining}
-              </span>
-              <Eyebrow>{quest.daysRemaining === 1 ? "day left" : "days left"}</Eyebrow>
-            </div>
-          )}
-        </div>
-
-        {/* Big progress bar */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between text-[12px]">
-            <span className="font-mono text-ink">
-              {quest.closed} / {quest.target} closed
-            </span>
-            <span className="font-mono" style={{ color: "var(--xp-teal)" }}>
-              {Math.round(quest.progressPct)}%
-            </span>
-          </div>
-          <XpBar
-            pct={quest.progressPct}
-            color="linear-gradient(90deg, var(--xp-purple), var(--xp-teal))"
-            height={14}
-            sheen
-          />
-        </div>
-
-        {/* Tags */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          {delta != null && (
-            <QuestTag
-              tone={delta >= 0 ? "good" : "bad"}
-              label={`${delta >= 0 ? "↑ +" : "↓ "}${delta}% vs last ${periodWord}`}
-            />
-          )}
-          {quest.hitBonus && <QuestTag tone="bonus" label="+500 XP · 100% cleared" />}
-          {quest.atRisk > 0 && (
-            <QuestTag tone="warn" label={`${quest.atRisk} at risk · WIP over avg`} />
-          )}
-          {quest.inFlight > 0 && (
-            <QuestTag tone="neutral" label={`${quest.inFlight} in flight`} />
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function QuestTag({
-  label,
-  tone,
-}: {
-  label: string;
-  tone: "good" | "bad" | "warn" | "bonus" | "neutral";
-}) {
-  const map: Record<string, { color: string; rgb: string }> = {
-    good: { color: "var(--xp-teal)", rgb: "var(--xp-teal-rgb)" },
-    bad: { color: NEG, rgb: "255,107,107" },
-    warn: { color: "var(--xp-amber)", rgb: "var(--xp-amber-rgb)" },
-    bonus: { color: "var(--xp-purple)", rgb: "var(--xp-purple-rgb)" },
-    neutral: { color: "var(--muted)", rgb: "74,85,104" },
-  };
-  const { color, rgb } = map[tone];
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 font-mono text-[11px]"
-      style={{
-        color,
-        background: `rgba(${rgb}, 0.12)`,
-        border: `1px solid rgba(${rgb}, 0.35)`,
-      }}
-    >
-      {label}
-    </span>
   );
 }
 

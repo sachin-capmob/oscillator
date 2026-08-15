@@ -38,7 +38,6 @@ const NAV = [
   { href: "/people", label: "People" },
   { href: "/squad", label: "Squad" },
   { href: "/teams", label: "Cycles" },
-  { href: "/issues", label: "Issues" },
   { href: "/report", label: "Report" },
 ];
 
@@ -79,10 +78,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
         {/* Top navigation rail — 56px, --edge bottom border only. Inner content
             is centered to the same max-width gutter as the page body. */}
         <header className="no-print sticky top-0 z-30 h-14 border-b border-edge bg-void">
-          <div className="mx-auto flex h-full max-w-[1600px] items-stretch px-6 lg:px-10">
+          <div className="mx-auto flex h-full max-w-[1600px] items-stretch px-4 sm:px-6 lg:px-10">
             <Link
               href="/"
-              className="-ml-1 flex items-center gap-3 pr-10 text-[14px] font-semibold tracking-eyebrow text-ink"
+              className="-ml-1 flex shrink-0 items-center gap-3 pr-4 text-[14px] font-semibold tracking-eyebrow text-ink sm:pr-10"
             >
               <span
                 className="inline-block h-2 w-2"
@@ -91,14 +90,16 @@ export function Shell({ children }: { children: React.ReactNode }) {
               />
               OSCILLATOR
             </Link>
-            <nav className="flex items-stretch gap-1">
+            {/* Scrolls horizontally rather than wrapping/clipping once the six
+                links no longer fit a narrow viewport. */}
+            <nav className="flex items-stretch gap-1 overflow-x-auto">
               {NAV.map((item) => {
                 const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
-                    className="relative flex items-center px-5 text-nav font-medium transition-colors hover:text-ink"
+                    className="relative flex shrink-0 items-center px-3 text-nav font-medium transition-colors hover:text-ink sm:px-5"
                     style={{ color: active ? "var(--ink)" : "var(--muted)" }}
                   >
                     {item.label}
@@ -119,7 +120,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         {/* Command bar — 52px, --surface; range selector + scrubber share the
             centered gutter so controls line up with the content below. */}
         <div className="no-print sticky top-14 z-20 border-b border-edge bg-surface">
-          <div className="mx-auto flex h-[52px] max-w-[1600px] items-center gap-6 px-6 lg:px-10">
+          <div className="mx-auto flex h-[52px] max-w-[1600px] items-center gap-3 px-4 sm:gap-6 sm:px-6 lg:px-10">
             <Eyebrowed label="RANGE">
               <Segmented
                 options={[
@@ -141,7 +142,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               onClick={refresh}
               disabled={refreshing}
               aria-label="Refresh dashboard data"
-              className="flex items-center gap-2 rounded px-3 py-1.5 text-[12px] font-medium tracking-eyebrow transition-all"
+              className="flex shrink-0 items-center gap-2 rounded px-2 py-1.5 text-[12px] font-medium tracking-eyebrow transition-all sm:px-3"
               style={{
                 color: refreshing ? "var(--muted)" : "var(--signal)",
                 border: "1px solid",
@@ -167,21 +168,23 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   fill="currentColor"
                 />
               </svg>
-              {refreshing ? "Refreshing…" : "Refresh"}
+              {/* Text hides below sm to keep the row from overflowing next to
+                  the range control; the icon alone stays a clear affordance. */}
+              <span className="hidden sm:inline">{refreshing ? "Refreshing…" : "Refresh"}</span>
             </button>
           </div>
         </div>
 
         {/* Date scrubber strip — the secondary control rail */}
         <div className="no-print border-b border-edge bg-void">
-          <div className="mx-auto max-w-[1600px] px-6 lg:px-10">
+          <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-10">
             <DateScrubber />
           </div>
         </div>
 
         {/* Content — centered, generous gutters + vertical rhythm so panels
             breathe instead of bleeding edge-to-edge. */}
-        <main className="mx-auto min-h-[60vh] max-w-[1600px] px-6 py-8 lg:px-10 lg:py-10">
+        <main className="mx-auto min-h-[60vh] max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
           {children}
         </main>
       </div>
@@ -198,8 +201,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
 function Eyebrowed({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-3.5">
-      <span className="eyebrow">{label}</span>
+    <div className="flex items-center gap-2 sm:gap-3.5">
+      {/* Hidden below sm — the segmented control's own labels (Day/Week/...)
+          already say what this is; freeing the space matters more there. */}
+      <span className="eyebrow hidden sm:inline">{label}</span>
       {children}
     </div>
   );

@@ -5,7 +5,6 @@ import { useRange } from "@/components/shell";
 import { AreaChart, type SeriesDef } from "@/components/charts";
 import {
   Leaderboard,
-  SprintQuestCard,
   StatTile,
   StreakRow,
   fmtXp,
@@ -13,7 +12,6 @@ import {
 import {
   buildPointsMap,
   buildRoster,
-  deriveSprintQuest,
   teamXp,
   XP_AMBER,
   XP_BLUE,
@@ -92,8 +90,6 @@ export default function OverviewPage() {
   const wipWarn =
     o && avgWip > 0 && o.wip > avgWip ? `over ${Math.round(avgWip)} avg` : null;
 
-  const quest = o && !loading ? deriveSprintQuest(o, wip.data?.series, isAllTime) : null;
-
   // --- Chart data (unchanged) ---
   const cycData =
     cyc.data?.series.map((p) => ({
@@ -124,17 +120,6 @@ export default function OverviewPage() {
             : "Loading the current period…"
         }
       >
-        {/* Sprint quest — the headline objective, above everything else */}
-        <div className="mb-6">
-          {quest ? (
-            <SprintQuestCard quest={quest} periodWord={periodWord} isAllTime={isAllTime} />
-          ) : (
-            <div className="relative h-[168px] border border-edge bg-surface">
-              <div className="loadbar" aria-hidden />
-            </div>
-          )}
-        </div>
-
         {/* Gamified KPI tiles */}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
           <StatTile
