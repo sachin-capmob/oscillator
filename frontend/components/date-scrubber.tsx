@@ -62,13 +62,17 @@ export function DateScrubber() {
     setAnchor(ticks[Math.max(0, Math.min(ticks.length - 1, i))].period);
 
   return (
-    <div className="flex items-stretch gap-7 py-3.5">
-      {/* Readout */}
-      <div className="flex min-w-[190px] flex-col justify-center gap-1">
-        <span className="eyebrow" style={{ color: stepsFromNow === 0 ? "var(--signal)" : "var(--muted)" }}>
+    <div className="flex items-stretch gap-3 py-3.5 sm:gap-7">
+      {/* Readout — narrower on mobile so the waveform still has room to be
+          legible/tappable rather than being squeezed to a sliver. */}
+      <div className="flex min-w-[92px] shrink-0 flex-col justify-center gap-1 sm:min-w-[190px]">
+        <span
+          className="eyebrow truncate"
+          style={{ color: stepsFromNow === 0 ? "var(--signal)" : "var(--muted)" }}
+        >
           {relativeLabel(stepsFromNow, range)} · {sel.completed ?? 0} done
         </span>
-        <span className="font-mono text-title text-ink">{periodLabel(sel.period, range)}</span>
+        <span className="truncate font-mono text-title text-ink">{periodLabel(sel.period, range)}</span>
       </div>
 
       {/* Waveform */}
@@ -100,7 +104,7 @@ export function DateScrubber() {
       </div>
 
       {/* Steppers */}
-      <div className="flex items-center gap-1">
+      <div className="flex shrink-0 items-center gap-1">
         <button
           type="button"
           onClick={() => go(selected - 1)}
@@ -123,7 +127,7 @@ export function DateScrubber() {
           type="button"
           onClick={() => go(ticks.length - 1)}
           disabled={atNow}
-          className="ml-1.5 flex h-9 items-center border px-4 text-nav font-medium uppercase tracking-eyebrow transition-colors"
+          className="ml-1.5 flex h-9 items-center border px-2.5 text-nav font-medium uppercase tracking-eyebrow transition-colors sm:px-4"
           style={
             atNow
               ? { borderColor: "var(--edge)", color: "var(--muted)" }

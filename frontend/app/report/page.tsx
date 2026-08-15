@@ -90,7 +90,7 @@ export default function ReportPage() {
   return (
     <div className="flex flex-col gap-6">
       {/* Controls — screen only, never printed */}
-      <div className="no-print flex items-center justify-between border border-edge bg-surface px-6 py-4">
+      <div className="no-print flex flex-col items-start gap-3 border border-edge bg-surface px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div>
           <p className="text-body text-ink">Engineering Activity Report</p>
           <p className="text-body text-muted">
@@ -114,8 +114,8 @@ export default function ReportPage() {
 
       {/* The report itself — plain black-on-white, print-first */}
       <div
-        className="report-page mx-auto w-full"
-        style={{ background: "#fff", color: "#111", maxWidth: "820px", padding: "40px 48px", fontFamily: "var(--font-sans)" }}
+        className="report-page mx-auto w-full max-w-[820px] px-5 py-8 sm:px-12 sm:py-10"
+        style={{ background: "#fff", color: "#111", fontFamily: "var(--font-sans)" }}
       >
         <div style={{ borderBottom: "2px solid #111", paddingBottom: 12, marginBottom: 20 }}>
           <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Engineering Activity Report</h1>
@@ -149,7 +149,11 @@ export default function ReportPage() {
 
             {/* Leaderboard */}
             <h2 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 8px" }}>Leaderboard</h2>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5 }}>
+            {/* Scrolls horizontally on a narrow screen rather than squeezing 8
+                columns illegibly — harmless on a real print page, which is
+                always wide enough for the table to fit at its natural width. */}
+            <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", minWidth: 640, borderCollapse: "collapse", fontSize: 11.5 }}>
               <thead>
                 <tr style={{ borderBottom: "1.5px solid #111" }}>
                   <Th align="left" style={{ width: 28 }}>#</Th>
@@ -208,6 +212,7 @@ export default function ReportPage() {
                 </tfoot>
               )}
             </table>
+            </div>
 
             <p style={{ fontSize: 10, color: "#999", marginTop: 24 }}>
               Points reflect labeled, closed Linear tickets scored against the team&rsquo;s Engineering Points
